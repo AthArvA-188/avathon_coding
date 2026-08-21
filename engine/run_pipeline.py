@@ -52,9 +52,18 @@ def main(argv: list[str] | None = None) -> int:
         for model, w in info["holdout_wape"].items():
             print(f"  holdout WAPE {model:>15}: {w:.1%}")
 
-    for stage in ("mps", "scenario"):
-        if stages[stage]:
-            print(f"[{stage}] not implemented yet (see docs/progress.md)")
+    if stages["mps"]:
+        from planz import mps
+        t0 = time.perf_counter()
+        info = mps.run(args.db, plan_id="baseline")
+        dt = time.perf_counter() - t0
+        print(f"[mps] baseline solved + validated in {dt:.0f}s")
+        print(f"  total production: {info['total_production']:,.0f} u")
+        print(f"  freight cost:     ${info['freight_cost']:,.0f}")
+        print(f"  unmet demand:     {info['total_short']:,.0f} u")
+
+    if stages["scenario"]:
+        print("[scenario] not implemented yet (see docs/progress.md)")
     return 0
 
 

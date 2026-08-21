@@ -115,8 +115,8 @@ avathon_coding/
 - **Target:** weekly `Net Sell-Through`, negatives clipped to 0 for training (D8); grain SKU × Geo × Channel (D7).
 - **Features:** lags {1,2,4,13,52}, rolling means/max {4,13}, holiday event one-hots ± lead/lag weeks, weekly price level & discount-vs-median for priced SKUs, weeks-since-release, class one-hots, geo/channel encodings.
 - **Backtest:** train ≤ 2023W26, score 2023W27–W39 vs naive & seasonal-naive; refit on all 104 wks for production forecast (D9).
-- **MPS mechanics:** decision vars = production per variant-week (int), pack-out binaries, shipments per geo-mode; constraints = caps, ≤4 slots, inventory balance, lifetime caps, non-negativity; objective = WOS-deviation penalties + freight cost + smoothing term.
-- **Scenario:** identical model + `prod[V2,w] + prod[V4,w] ≤ 4500` for w ∈ 2023W40–W45; allocation emerges from WOS-equalizing objective (D13) and is reported explicitly.
+- **MPS mechanics (implemented, D25):** decision vars = weekly production per variant, pack-out binaries (≤4/week), shipments per variant×geo×mode (cheapest feasible mode + Air expedite), two-tier inventories (DC on-hand + in-transit vs 12-WOS target; Channel-3 stock vs 13-WOS target; Ch1/2 SI=ST direct). Hard: weekly 17,280 / quarterly 224,000, slots, balances, non-negativity, D23 volume caps. Objective: shortage ≫ WOS deviations > freight > holding. WOS targets linearized as next-12/13-week demand sums (run-out convention); demand beyond the horizon padded with the same fiscal weeks one year earlier. Post-solve, `validate.py` independently re-checks every hard constraint and writes the `validation` table; the pipeline fails on any FAIL.
+- **Scenario (phase 4):** identical model + per-week combined cap `prod[V2,w] + prod[V4,w] ≤ 4500` for w ∈ 2023W40–W45 via the `extra_prod_caps` hook; allocation emerges from WOS-equalizing objective (D13) and is reported explicitly.
 
 ## 6. How to run
 

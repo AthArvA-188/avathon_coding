@@ -103,6 +103,24 @@ def test_npi_ramps_hit_deal_volumes(conn, fb):
         assert np.all(v["p10"] <= v["p50"]) and np.all(v["p50"] <= v["p90"])
 
 
+def test_npi_ramp_shape(conn, fb):
+    # the normalization makes totals blind to shape — a flat ramp passes the
+    # volume test — so pin the shape itself (mutation-proven gap)
+    npi = lifecycle.npi_forecasts(conn, fb)
+    ramp = npi[("Variant V10", "Geo G1", "Channel 3")]["p50"]
+    rel_i = lifecycle.NPI_RELEASE_O - lifecycle.H_START      # 2023W49
+    assert ramp[rel_i] > 0                                   # launches on time
+    # peak lands in the Black Friday / XMAS cluster (2024W08..2024W13),
+    # not at release and not on a flat plateau
+    peak = int(np.argmax(ramp))
+    lo = ft.offset_of("2024W08") - lifecycle.H_START
+    hi = ft.offset_of("2024W13") - lifecycle.H_START
+    assert lo <= peak <= hi, f"peak at horizon week {peak}"
+    assert ramp[peak] > 3 * ramp[rel_i]                      # real ramp-up
+    # launch is not front-loaded: first 4 weeks carry a small share
+    assert ramp[rel_i:rel_i + 4].sum() < 0.15 * ramp.sum()
+
+
 def test_seasonal_index_peaks_in_holiday_quarter(fb):
     idx = lifecycle.seasonal_index(fb)
     bf = idx[ft.offset_of("2024W09")]               # Black Friday
@@ -121,13 +139,7 @@ def test_cap_specs_remaining_volumes(conn):
 
 
 # ---------- end-to-end forecast integration ----------
-
-@pytest.fixture(scope="module")
-def forecast_db(ingest_counts_and_db):
-    _, db_path = ingest_counts_and_db
-    info = fc.run(db_path)
-    return info, db_path
-
+# (forecast_db fixture lives in conftest.py, shared with the MPS tests)
 
 def test_forecast_integration(forecast_db):
     info, db_path = forecast_db
@@ -136,16 +148,30 @@ def test_forecast_integration(forecast_db):
     c.row_factory = sqlite3.Row
     try:
         n = c.execute("SELECT COUNT(*) FROM forecast").fetchone()[0]
-        assert n == info["forecast_rows"] == info["series"] * 52
+        # pin the series universe: 124 active grains x 52 weeks
+        assert n == info["forecast_rows"] == 124 * 52
         assert c.execute("SELECT COUNT(*) FROM forecast WHERE p10 > p50"
                          " OR p50 > p90 OR p10 < 0").fetchone()[0] == 0
         assert c.execute("SELECT SUM(ABS(p50)) FROM forecast"
                          " WHERE variant = 'Variant V12'").fetchone()[0] == 0
-        # the model must beat both baselines on overall holdout WAPE
-        wapes = dict(c.execute(
-            "SELECT model, wape FROM forecast_scores"
-            " WHERE scope_type = 'overall'").fetchall())
-        assert wapes["xgb"] < wapes["seasonal_naive"] < wapes["naive"]
+        # absolute accuracy bands, not just ordering (mutation-proven gap:
+        # dropping the sample weights kept the ordering while bias went -30%)
+        scores = {r[0]: r for r in c.execute(
+            "SELECT model, wape, bias, pinball10, pinball90"
+            " FROM forecast_scores WHERE scope_type = 'overall'")}
+        assert scores["xgb"][1] < 0.42                       # baseline 0.376
+        assert abs(scores["xgb"][2]) < 0.10                  # baseline +0.033
+        # canary: baseline model pins data/feature alignment
+        assert scores["seasonal_naive"][1] == pytest.approx(0.507, abs=0.02)
+        assert scores["xgb"][1] < scores["seasonal_naive"][1] < scores["naive"][1]
+        # quantile bands exist and are not collapsed
+        assert 0 < scores["xgb"][3] and 0 < scores["xgb"][4]
+        band = c.execute("SELECT AVG(p90 - p10) FROM forecast"
+                         " WHERE p50 > 0").fetchone()[0]
+        assert band > 1.0
+        # horizon level sanity: catches recursion feedback bugs
+        total = c.execute("SELECT SUM(p50) FROM forecast").fetchone()[0]
+        assert 800_000 < total < 1_150_000                   # baseline 952,865
         # cap compliance: horizon totals within remaining volumes
         v5 = c.execute("SELECT SUM(p50) FROM forecast"
                        " WHERE variant = 'Variant V5'").fetchone()[0]

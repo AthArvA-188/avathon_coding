@@ -64,8 +64,8 @@ Format: each decision lists the options considered, the choice, and why. Status 
 ## D12. Freight mode policy — Status: Default
 - **Given table:** Air 1wk $7 (all geos); Ground 1wk $2.5 (G4); Fast Boat 5wk $3.5 (G1); Std Ocean 8wk $2 (G1); Std Ocean 11wk $2.5 (G2).
 - **Assumptions for gaps:** G3/G5 have Air only; G4 uses Ground (dominates Air: same lead time, cheaper); no other modes exist. Raised as a client question.
-- **Choice:** steady-state supply on the cheapest feasible mode per geo (G1 Std Ocean, G2 Std Ocean, G4 Ground, G3/G5 Air); the "Sea Freight 6 WOS" buffer applies to ocean-served geos; Air is the expedite lever, priced in the scenario diff.
-- **Why:** Matches the Kanban+Sea structure in the Objective sheet; cost-minimal subject to lead-time feasibility; expedite-vs-stockout becomes an explicit, priced trade-off.
+- **Choice (revised after adversarial review):** the solver sees each geo's full **cost-Pareto frontier** — a mode is offered if it is strictly faster than every cheaper mode. G1: Std Ocean $2/8wk + Fast Boat $3.50/5wk + Air $7/1wk; G2: Std Ocean + Air; G4: Ground only (Air dominated); G3/G5: Air only. The original v1 policy (cheapest + Air) omitted Fast Boat entirely.
+- **Why:** Matches the Kanban+Sea structure in the Objective sheet; the solver, not a heuristic, picks the cost/speed mix, so expedite-vs-stockout is an explicit, priced trade-off.
 
 ## D13. Scenario allocation rule (V2 vs V4) — Status: Default (finalize with data)
 - **Options:** (a) proportional to forecast demand; (b) proportional to WOS shortfall (priority to the variant closer to stockout); (c) channel-commitment priority.
@@ -111,6 +111,19 @@ Format: each decision lists the options considered, the choice, and why. Status 
 - **Found:** V8 already sold 33,180 in G1 vs a stated "lifetime volume" of 13,832 (and 3,113 in G2 where the stated volume is 0); V9 sold across G2/G4 against stated zeros. The one-time deals are all *under* their stated totals, with V7 nearly exhausted (20,983 of 22k) and its demand collapsed to ~4/wk.
 - **Choice:** OTD numbers (V5/V6/V7/V12) = **lifetime totals**, remaining = total − net sold (V5 2,484 · V6 15,292 · V7 1,017 remain). Exclusive per-geo numbers (V8–V11) = **forward volumes from the last actual week** (the only self-consistent reading; for the in-horizon launches V10/V11 forward = the whole deal). Zero-cap geos with active history (V8-G2, V9-G2/G4) left uncapped. V10's stated G2 volume has no G2 series — reallocated across its existing RoW geos (G3/G4/G5) by core-variant mix.
 - **Consequences:** V5 exhausts at 2023W51, V7 by 2024W10, V6 by 2024W21; V10/V11 ramp to exactly 57,407 / 23,689. All flagged for the client.
+
+## D24. MPS opening inventory — Status: Default (client question)
+- **Problem:** the data gives no opening inventory position at 2023W40.
+- **Options:** (a) start empty (forces a massive, unrealistic initial build); (b) start at the client's own stated policy targets.
+- **Choice:** **(b)** — launched variants open at OH = 6 WOS (Kanban) with a steady-state arrival pipeline during the first lead-time weeks (≈ the Sea-Freight 6 WOS in transit) and channel stock at 13 WOS; V10/V11 open empty (pre-launch). The client's actual opening position is a top open question — it shifts the first quarter's plan materially.
+
+## D25. MPS formulation & objective weights — Status: Default
+- **Form:** MILP (PuLP + CBC, ~44 s, 0.5% gap). Variables: weekly production per variant, binary pack-out slots (≤4/week), shipments per variant×geo×mode, two-tier inventories (DC on-hand + in-transit = supply position vs 12-WOS target; Channel-3 reseller stock vs 13-WOS target; Ch1/2 ship direct, SI=ST).
+- **Hard:** weekly 17,280 / quarterly 224,000 caps, slot limit, balances, non-negativity, D23 volume caps, scenario hook (per-week combined caps).
+- **Soft (weights):** unmet demand $1,000/u ≫ channel-WOS shortfall $3/u-wk > supply-WOS shortfall $2/u-wk > freight ($2–7/u) > holding ($0.05 OH, $0.02 channel). WOS targets are linearized as target stock = next-12/13 weeks of P50 demand (exactly the run-out convention). Post-solve, an independent validator re-checks every hard constraint; the pipeline fails on any violation.
+- **Anti-gaming rule (from adversarial review):** shipments that cannot arrive within the horizon are forbidden — without this, the solver parks ~89k units in transit near the horizon end purely to earn supply-WOS credit on stock that never lands.
+- **Key outcomes (baseline, post-review):** 846,991 u (94.5% of annual capacity, 3 quarters at cap), **0 u unmet**, freight $5.22M of which $4.68M is Air — expedite forced by capacity scarcity, since a just-in-time-produced unit cannot make an ocean lead even with Fast Boat available. Buffers are sacrificed (median supply WOS 1.0 vs target 12) to protect sell-through and channel stock (median 12.0 vs 13). 9/9 independent validators pass, incl. a full inventory-balance replay from shipments.
+- **Known sensitivity (deck):** the Air/Ocean split is a step function of the supply-WOS penalty (threshold ≈ $0.71/u-wk vs the chosen $2) — the freight headline is a policy choice, not a physical constant. Cumulative P90 can exceed contractual volumes (caps clip the P50 path); P90 is per-week uncertainty, not a feasible cumulative.
 
 ## D19. Horizon & calendar interpretation — Status: Default
 - **Choice:** Actuals end **2023W39** (per the file, 104 filled weeks — the brief's "2023W26" text is stale). Horizon = **2023W40 → 2024W39** (52 weeks = 4 fiscal quarters of 13). Week labels are **fiscal** (FY starts ~calendar October; evidence: Black Friday = fiscal W09, XMAS = fiscal W13–14, pricing date 2021-07-20 ↔ fiscal 2021W43). CQ = fiscal quarter ending 2023W39, so the shortage window is **2023W40–2023W45**.

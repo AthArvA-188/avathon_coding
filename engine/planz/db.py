@@ -141,9 +141,10 @@ CREATE TABLE forecast_scores (
 """
 
 # Owned by the MPS/scenario stages (phases 3-4); plan_id 'baseline'|'scenario'.
+# CREATE IF NOT EXISTS (no drops): plans are plan_id-scoped, and re-running
+# one stage must never destroy another stage's stored plan.
 MPS_SCHEMA = """
-DROP TABLE IF EXISTS mps;
-CREATE TABLE mps (
+CREATE TABLE IF NOT EXISTS mps (
     plan_id    TEXT NOT NULL,
     variant    TEXT NOT NULL,
     week_label TEXT NOT NULL,
@@ -152,8 +153,7 @@ CREATE TABLE mps (
     PRIMARY KEY (plan_id, variant, week_label)
 );
 
-DROP TABLE IF EXISTS shipments;
-CREATE TABLE shipments (
+CREATE TABLE IF NOT EXISTS shipments (
     plan_id    TEXT NOT NULL,
     variant    TEXT NOT NULL,
     geo        TEXT NOT NULL,
@@ -164,8 +164,7 @@ CREATE TABLE shipments (
     PRIMARY KEY (plan_id, variant, geo, week_label, mode)
 );
 
-DROP TABLE IF EXISTS inventory;
-CREATE TABLE inventory (
+CREATE TABLE IF NOT EXISTS inventory (
     plan_id     TEXT NOT NULL,
     variant     TEXT NOT NULL,
     geo         TEXT NOT NULL,
@@ -180,8 +179,7 @@ CREATE TABLE inventory (
     PRIMARY KEY (plan_id, variant, geo, week_label)
 );
 
-DROP TABLE IF EXISTS validation;
-CREATE TABLE validation (
+CREATE TABLE IF NOT EXISTS validation (
     plan_id    TEXT NOT NULL,
     check_name TEXT NOT NULL,
     status     TEXT NOT NULL CHECK (status IN ('PASS', 'FAIL')),

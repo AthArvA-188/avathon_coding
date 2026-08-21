@@ -37,6 +37,15 @@ def conn(ingest_counts_and_db):
 
 
 @pytest.fixture(scope="session")
+def forecast_db(ingest_counts_and_db):
+    """Forecast run once on the temp DB; shared by forecast and MPS tests."""
+    from planz import forecast as planz_forecast
+    _, db_path = ingest_counts_and_db
+    info = planz_forecast.run(db_path)
+    return info, db_path
+
+
+@pytest.fixture(scope="session")
 def raw_xl():
     with pd.ExcelFile(XLSX) as xl:
         yield xl

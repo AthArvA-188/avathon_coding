@@ -9,7 +9,7 @@ Running log. Newest phase status at top of each section; check items off as they
 | 0 | Planning: data audit, decisions, PRD, repo setup | ✅ Done (2026-08-21) |
 | 1 | Ingestion: xlsx → SQLite, fiscal calendar, tests | ✅ Done (2026-08-21) |
 | 2 | Forecast: features, baselines, XGBoost quantiles, lifecycle, holdout scoring | ✅ Done (2026-08-21) |
-| 3 | MPS: MILP, pack-out, freight, WOS, constraint validators | ⬜ Not started |
+| 3 | MPS: MILP, pack-out, freight, WOS, constraint validators | ✅ Done (2026-08-21) |
 | 4 | Scenario: V2+V4 shared cap, allocation, diff computation | ⬜ Not started |
 | 5 | UI: forecast explorer, MPS view, scenario toggle + diff | ⬜ Not started |
 | 6 | Packaging: deck (HTML), README, start scripts, cover note | ⬜ Not started |
@@ -41,13 +41,16 @@ Running log. Newest phase status at top of each section; check items off as they
 - [x] Production forecast: 124 series × 52 wks; horizon P50 total **952,865 units vs 896,000 annual capacity** → structurally supply-constrained year (headline for deck)
 - [x] 33 tests green (metrics hand-checks, cap clipping, NPI totals, integration incl. must-beat-baseline gate)
 
-## Phase 3 — MPS
+## Phase 3 — MPS ✅ (2026-08-21)
 
-- [ ] WOS calculator (run-out method) + tests
-- [ ] MILP: production/pack-out vars, caps, ≤4 pack-out slots, WOS penalties, freight costs
-- [ ] Independent constraint validator + tests
-- [ ] Freight mode assignment per D12; capacity utilization outputs
-- [ ] Write `mps_baseline` tables
+- [x] Run-out WOS calculator + tests (spiky-demand cases)
+- [x] MILP (PuLP/CBC, 44 s): production/pack-out binaries, weekly+quarterly caps, ≤4 slots, two-tier inventory (supply position 12 WOS, channel 13 WOS), D23 volume caps, scenario hook — D25
+- [x] Freight per D12: cheapest feasible per geo + Air expedite; result: $5.13M ($4.37M Air = the price of capacity scarcity)
+- [x] Independent validators (7 checks) + tests proving each catches its violation; plan tables written (`mps`, `shipments`, `inventory`, `validation`)
+- [x] Adversarial review round 2 (6 agents, mutation-tested): 3 confirmed HIGH test gaps (no MILP solve in suite — a zero-production plan passed all validators; accuracy asserted only as ordering; NPI shape untested) + 16 advisories. Fixed: MILP smoke-solve test, absolute score bands, NPI shape pins, Fast Boat added to the freight frontier, no-phantom-shipment rule, NPI analog deseasonalization, balance-replay + shorts validators, non-destructive plan-scoped schema, negative-index guard
+- [x] Baseline (post-review): 846,991 u produced (94.5% of capacity, 3 quarters at cap), **0 u unmet**, freight $5.22M ($4.68M Air), 9/9 validators
+- [x] 48 tests green (~20 s incl. reduced-universe MILP smoke solve)
+- [x] Progress artifact published & updated (charts: forecast, accuracy, capacity crunch)
 
 ## Phase 4 — Scenario
 

@@ -28,9 +28,15 @@ NPI_BAND = 0.4                     # +-40% for P10/P90 (judgment, documented)
 ANALOGS = [("Variant V8", "2023W02"), ("Variant V9", "2022W48")]
 
 
-def analog_curve(fb: ft.FeatureBuilder, n_weeks: int) -> np.ndarray:
+def analog_curve(fb: ft.FeatureBuilder, n_weeks: int,
+                 seas: np.ndarray | None = None) -> np.ndarray:
     """Average normalized launch trajectory (share of volume by week-since-
-    release) of the V8/V9 analogs in Geo G1, extended/truncated to n_weeks."""
+    release) of the V8/V9 analogs in Geo G1, extended/truncated to n_weeks.
+
+    Pass `seas` (the seasonal index over week offsets) to DESEASONALIZE each
+    analog by its own calendar before averaging — otherwise the analogs'
+    holiday spikes get double-counted when the ramp is later multiplied by
+    the target window's seasonal index."""
     curves = []
     for variant, release in ANALOGS:
         ro = ft.offset_of(release)
@@ -38,6 +44,8 @@ def analog_curve(fb: ft.FeatureBuilder, n_weeks: int) -> np.ndarray:
         for (v, g, c), hist in fb.all_history.items():
             if v == variant and g == "Geo G1":
                 total += hist[ro:]
+        if seas is not None:
+            total = total / np.maximum(seas[ro:ro + len(total)], 0.25)
         if len(total) < n_weeks:                     # extend with recent rate
             tail = np.full(n_weeks - len(total), total[-4:].mean())
             total = np.concatenate([total, tail])
@@ -105,7 +113,8 @@ def npi_forecasts(conn: sqlite3.Connection, fb: ft.FeatureBuilder
     All volume goes to the Channel 3 series (the analogs sold ~100% Ch3);
     other existing channel grains get explicit zeros."""
     n_ramp = H_END - NPI_RELEASE_O + 1
-    shape = analog_curve(fb, n_ramp) * seasonal_index(fb)[NPI_RELEASE_O:H_END + 1]
+    seas = seasonal_index(fb)
+    shape = analog_curve(fb, n_ramp, seas) * seas[NPI_RELEASE_O:H_END + 1]
     shape = shape / shape.sum()
     volumes = npi_geo_volumes(conn, fb)
 
