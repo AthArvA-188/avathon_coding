@@ -110,6 +110,86 @@ CREATE TABLE freight (
 CREATE INDEX IF NOT EXISTS idx_actuals_week ON actuals(week_label);
 """
 
+# Owned by the forecast stage (phase 2); rebuilt on every --forecast run.
+# No FKs into ingest tables (see init_ingest_schema note).
+FORECAST_SCHEMA = """
+DROP TABLE IF EXISTS forecast;
+CREATE TABLE forecast (
+    variant    TEXT NOT NULL,
+    geo        TEXT NOT NULL,
+    channel    TEXT NOT NULL,
+    week_label TEXT NOT NULL,
+    p10        REAL NOT NULL,
+    p50        REAL NOT NULL,
+    p90        REAL NOT NULL,
+    method     TEXT NOT NULL CHECK (method IN ('xgb', 'npi_ramp', 'eol_zero')),
+    PRIMARY KEY (variant, geo, channel, week_label)
+);
+
+DROP TABLE IF EXISTS forecast_scores;
+CREATE TABLE forecast_scores (
+    model      TEXT NOT NULL,             -- 'xgb' | 'naive' | 'seasonal_naive'
+    scope_type TEXT NOT NULL,             -- 'overall' | 'geo' | 'variant'
+    scope      TEXT NOT NULL,
+    wape       REAL NOT NULL,
+    smape      REAL NOT NULL,
+    bias       REAL NOT NULL,
+    pinball10  REAL,                      -- xgb only
+    pinball90  REAL,
+    PRIMARY KEY (model, scope_type, scope)
+);
+"""
+
+# Owned by the MPS/scenario stages (phases 3-4); plan_id 'baseline'|'scenario'.
+MPS_SCHEMA = """
+DROP TABLE IF EXISTS mps;
+CREATE TABLE mps (
+    plan_id    TEXT NOT NULL,
+    variant    TEXT NOT NULL,
+    week_label TEXT NOT NULL,
+    production REAL NOT NULL,
+    packout    INTEGER NOT NULL,          -- 1 if the variant uses a slot
+    PRIMARY KEY (plan_id, variant, week_label)
+);
+
+DROP TABLE IF EXISTS shipments;
+CREATE TABLE shipments (
+    plan_id    TEXT NOT NULL,
+    variant    TEXT NOT NULL,
+    geo        TEXT NOT NULL,
+    week_label TEXT NOT NULL,             -- ship week (OEM side)
+    mode       TEXT NOT NULL,
+    units      REAL NOT NULL,
+    cost       REAL NOT NULL,
+    PRIMARY KEY (plan_id, variant, geo, week_label, mode)
+);
+
+DROP TABLE IF EXISTS inventory;
+CREATE TABLE inventory (
+    plan_id     TEXT NOT NULL,
+    variant     TEXT NOT NULL,
+    geo         TEXT NOT NULL,
+    week_label  TEXT NOT NULL,
+    on_hand     REAL NOT NULL,            -- at destination DC, end of week
+    in_transit  REAL NOT NULL,
+    ch3_inventory REAL NOT NULL,          -- reseller channel stock
+    wos_supply  REAL,                     -- run-out WOS of on_hand+in_transit
+    wos_channel REAL,                     -- run-out WOS of ch3 stock vs Ch3 demand
+    short_direct REAL NOT NULL,           -- unmet Ch1+Ch2 demand this week
+    short_ch3   REAL NOT NULL,            -- unmet Ch3 sell-through this week
+    PRIMARY KEY (plan_id, variant, geo, week_label)
+);
+
+DROP TABLE IF EXISTS validation;
+CREATE TABLE validation (
+    plan_id    TEXT NOT NULL,
+    check_name TEXT NOT NULL,
+    status     TEXT NOT NULL CHECK (status IN ('PASS', 'FAIL')),
+    detail     TEXT NOT NULL,
+    PRIMARY KEY (plan_id, check_name)
+);
+"""
+
 
 def connect(path: str | Path) -> sqlite3.Connection:
     # isolation_level=None: no implicit transactions — callers that write
@@ -121,12 +201,24 @@ def connect(path: str | Path) -> sqlite3.Connection:
     return conn
 
 
+def _run_script(conn: sqlite3.Connection, script: str) -> None:
+    # NOTE: naive split — schema comments must never contain ';'.
+    for stmt in script.split(";"):
+        if stmt.strip():
+            conn.execute(stmt)
+
+
+def init_forecast_schema(conn: sqlite3.Connection) -> None:
+    _run_script(conn, FORECAST_SCHEMA)
+
+
+def init_mps_schema(conn: sqlite3.Connection) -> None:
+    _run_script(conn, MPS_SCHEMA)
+
+
 def init_ingest_schema(conn: sqlite3.Connection) -> None:
     # Statement-by-statement (not executescript, which force-commits) so the
     # DDL joins the caller's open transaction. Later-phase tables (forecast,
     # mps, scenario) must NOT declare FKs into these tables: ingest rebuilds
     # them wholesale, and series_id is not stable across ingests.
-    # NOTE: naive split — schema comments must never contain ';'.
-    for stmt in INGEST_SCHEMA.split(";"):
-        if stmt.strip():
-            conn.execute(stmt)
+    _run_script(conn, INGEST_SCHEMA)

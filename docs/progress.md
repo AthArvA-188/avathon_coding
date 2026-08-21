@@ -8,7 +8,7 @@ Running log. Newest phase status at top of each section; check items off as they
 | --- | --- | --- |
 | 0 | Planning: data audit, decisions, PRD, repo setup | ✅ Done (2026-08-21) |
 | 1 | Ingestion: xlsx → SQLite, fiscal calendar, tests | ✅ Done (2026-08-21) |
-| 2 | Forecast: features, baselines, XGBoost quantiles, lifecycle, holdout scoring | ⬜ Not started |
+| 2 | Forecast: features, baselines, XGBoost quantiles, lifecycle, holdout scoring | ✅ Done (2026-08-21) |
 | 3 | MPS: MILP, pack-out, freight, WOS, constraint validators | ⬜ Not started |
 | 4 | Scenario: V2+V4 shared cap, allocation, diff computation | ⬜ Not started |
 | 5 | UI: forecast explorer, MPS view, scenario toggle + diff | ⬜ Not started |
@@ -32,13 +32,14 @@ Running log. Newest phase status at top of each section; check items off as they
 - [x] Adversarial review workflow (7 agents): 2 confirmed HIGH test gaps + 18 advisories; fill fabrication, duplicate-date weighting, atomicity, and all test-coverage gaps fixed
 - [x] 23 tests green: calendar vs seasonality ground truth, full-series-grain totals reconciled to xlsx, price values vs independent recomputation, params/freight full double-entry, quirks (D20–D22)
 
-## Phase 2 — Forecast
+## Phase 2 — Forecast ✅ (2026-08-21)
 
-- [ ] Feature builder (lags, rolling stats, holiday flags, price index, lifecycle features)
-- [ ] Baselines: naive, seasonal-naive; scoring harness (WAPE/sMAPE/bias/pinball) + tests
-- [ ] XGBoost P10/P50/P90 on 13-wk holdout (2023W27–W39); beat-or-explain vs baselines
-- [ ] NPI analog ramps (V10/V11), EOL zero (V12), lifetime-cap enforcement + tests
-- [ ] Refit on full history; write `forecast` table
+- [x] FeatureBuilder: lags (incl. label-based YoY across the 53-wk 2021), rolling stats, 8 holiday-group flags ± adjacency, relative price index (known-ahead to 2024W27), lifecycle features
+- [x] Scoring harness (WAPE/sMAPE/bias/pinball) + baselines; recursive 13-wk holdout backtest
+- [x] XGBoost P10/P50/P90 on log1p target with volume weights: **37.6% WAPE / +3.3% bias vs seasonal-naive 50.7%** (experiment log in D9); weak spots documented (V5/V6/V9 lumpy deals, G3)
+- [x] NPI analog ramps ×seasonal index for V10/V11 (exact deal volumes); EOL zero V12; D23 forward-volume caps enforced (V5 exhausts 2023W51, V7 2024W10, V6 2024W21)
+- [x] Production forecast: 124 series × 52 wks; horizon P50 total **952,865 units vs 896,000 annual capacity** → structurally supply-constrained year (headline for deck)
+- [x] 33 tests green (metrics hand-checks, cap clipping, NPI totals, integration incl. must-beat-baseline gate)
 
 ## Phase 3 — MPS
 

@@ -42,7 +42,17 @@ def main(argv: list[str] | None = None) -> int:
         for table, n in counts.items():
             print(f"  {table:>14}: {n:,}")
 
-    for stage in ("forecast", "mps", "scenario"):
+    if stages["forecast"]:
+        from planz import forecast
+        t0 = time.perf_counter()
+        info = forecast.run(args.db)
+        dt = time.perf_counter() - t0
+        print(f"[forecast] {info['series']} series x 52 weeks"
+              f" ({info['forecast_rows']:,} rows) in {dt:.1f}s")
+        for model, w in info["holdout_wape"].items():
+            print(f"  holdout WAPE {model:>15}: {w:.1%}")
+
+    for stage in ("mps", "scenario"):
         if stages[stage]:
             print(f"[{stage}] not implemented yet (see docs/progress.md)")
     return 0

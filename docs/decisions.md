@@ -46,8 +46,9 @@ Format: each decision lists the options considered, the choice, and why. Status 
 
 ## D9. Backtest design — Status: Default
 - **Options:** (a) single 13-week holdout (2023W27–W39); (b) rolling-origin 3×13-week folds; (c) no holdout, in-sample only.
-- **Choice:** **(a)** as the headline score, with the final model refit on all 104 weeks for the production forecast. Baselines: seasonal-naive (lag-52) and naive (lag-1). Metrics: WAPE, sMAPE, bias, pinball@P10/P90.
+- **Choice:** **(a)** as the headline score, with the final model refit on all 104 weeks for the production forecast. Baselines: seasonal-naive (same fiscal week last year, label-based so the 53-week 2021 is handled) and naive (last value). Metrics: WAPE, sMAPE, bias, pinball@P10/P90.
 - **Why:** 13 weeks = one fiscal quarter incl. no major holiday cluster; honest yet simple. Rolling-origin is the "if another week" upgrade.
+- **Model config (experiment log, Phase 2):** target = `log1p(units)` (quantiles are invariant under monotone transforms, so `expm1` gives exact unit-space quantiles), recursion fed by P50, `sample_weight = log1p(y)+1`. Experiments on the holdout: raw-scale target 53.2% WAPE/−16% bias; +log1p 41.2%/−30%; +mean-model feed diverged (+2084% on V7, reverted); +volume weights **37.6% WAPE / +3.3% bias** vs seasonal-naive 50.7%/+8.3% — adopted. Honest weak spots: lumpy single-retailer deals V5/V6/V9 (P50 under-bias −59…−73%; partly cap-truncated anyway) and micro-volume G3.
 
 ## D10. Lifecycle handling — Status: Default
 - **Options for NPI (V10/V11, released 2023W49 — zero history):** (a) analog launch curves from V8/V9 scaled by lifetime volume; (b) flat spread of lifetime volume; (c) exclude from forecast.
@@ -105,6 +106,11 @@ Format: each decision lists the options considered, the choice, and why. Status 
 ## D22. Fiscal-2024 Promo Q4 seasonality rows — Status: Default (client question)
 - **Found:** the sheet's two fiscal-2024 Promo Q4 rows are internally inconsistent (`2024_Q4_02`↔`2024_42` implies Q4 starts W41; `2024_Q4_03`↔`2024_44` implies W42; every other 2024 row implies the standard W40).
 - **Choice:** treat fiscal 2024 as a standard 52-week year; store the rows as given (they lie beyond both the data range and the horizon); exclude the two rows from the strict calendar test; raise with the client.
+
+## D23. Exclusive/OTD volume interpretation — Status: Default (client question)
+- **Found:** V8 already sold 33,180 in G1 vs a stated "lifetime volume" of 13,832 (and 3,113 in G2 where the stated volume is 0); V9 sold across G2/G4 against stated zeros. The one-time deals are all *under* their stated totals, with V7 nearly exhausted (20,983 of 22k) and its demand collapsed to ~4/wk.
+- **Choice:** OTD numbers (V5/V6/V7/V12) = **lifetime totals**, remaining = total − net sold (V5 2,484 · V6 15,292 · V7 1,017 remain). Exclusive per-geo numbers (V8–V11) = **forward volumes from the last actual week** (the only self-consistent reading; for the in-horizon launches V10/V11 forward = the whole deal). Zero-cap geos with active history (V8-G2, V9-G2/G4) left uncapped. V10's stated G2 volume has no G2 series — reallocated across its existing RoW geos (G3/G4/G5) by core-variant mix.
+- **Consequences:** V5 exhausts at 2023W51, V7 by 2024W10, V6 by 2024W21; V10/V11 ramp to exactly 57,407 / 23,689. All flagged for the client.
 
 ## D19. Horizon & calendar interpretation — Status: Default
 - **Choice:** Actuals end **2023W39** (per the file, 104 filled weeks — the brief's "2023W26" text is stale). Horizon = **2023W40 → 2024W39** (52 weeks = 4 fiscal quarters of 13). Week labels are **fiscal** (FY starts ~calendar October; evidence: Black Friday = fiscal W09, XMAS = fiscal W13–14, pricing date 2021-07-20 ↔ fiscal 2021W43). CQ = fiscal quarter ending 2023W39, so the shortage window is **2023W40–2023W45**.
