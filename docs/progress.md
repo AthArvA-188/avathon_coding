@@ -10,7 +10,7 @@ Running log. Newest phase status at top of each section; check items off as they
 | 1 | Ingestion: xlsx → SQLite, fiscal calendar, tests | ✅ Done (2026-08-21) |
 | 2 | Forecast: features, baselines, XGBoost quantiles, lifecycle, holdout scoring | ✅ Done (2026-08-21) |
 | 3 | MPS: MILP, pack-out, freight, WOS, constraint validators | ✅ Done (2026-08-21) |
-| 4 | Scenario: V2+V4 shared cap, allocation, diff computation | ⬜ Not started |
+| 4 | Scenario: V2+V4 shared cap, allocation, diff computation | ✅ Done (2026-08-21) |
 | 5 | UI: forecast explorer, MPS view, scenario toggle + diff | ⬜ Not started |
 | 6 | Packaging: deck (HTML), README, start scripts, cover note | ⬜ Not started |
 
@@ -52,11 +52,13 @@ Running log. Newest phase status at top of each section; check items off as they
 - [x] 48 tests green (~20 s incl. reduced-universe MILP smoke solve)
 - [x] Progress artifact published & updated (charts: forecast, accuracy, capacity crunch)
 
-## Phase 4 — Scenario
+## Phase 4 — Scenario ✅ (2026-08-21)
 
-- [ ] Re-solve with V2+V4 ≤ 4,500/wk (2023W40–W45); allocation per D13
-- [ ] Diff computation: volume Δ, freight cost Δ, WOS violations by geo, stockout weeks by SKU, pack-out slot changes, recovery curve
-- [ ] Write `mps_scenario` + `scenario_diff` tables; tests on the shared-cap validator
+- [x] Re-solve with V2+V4 ≤ 4,500/wk (2023W40–W45) via the `extra_prod_caps` hook; 35 s, all validators PASS incl. the shared-cap check
+- [x] Allocation observed (D13): alternating full-cap weeks → exact 50/50 split (13,500 u each), batching to preserve pack-out slots
+- [x] Diff summary: volume −346 u, freight ≈ flat (−$76k, within solver gap), unmet +2 u, V2+V4 supply position trails baseline through **2024W29** (~8-month recovery tail), Ch3 drift + per-geo WOS impact computed
+- [x] Both plans coexist plan-scoped in the same tables (`scenario_diff` table dropped as redundant — the UI diffs the two plan_ids directly)
+- [x] 51 tests green (reduced-universe scenario solve: cap binds in-window, catch-up beyond, baseline untouched)
 
 ## Phase 5 — UI
 

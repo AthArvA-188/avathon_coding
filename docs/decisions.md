@@ -67,10 +67,10 @@ Format: each decision lists the options considered, the choice, and why. Status 
 - **Choice (revised after adversarial review):** the solver sees each geo's full **cost-Pareto frontier** — a mode is offered if it is strictly faster than every cheaper mode. G1: Std Ocean $2/8wk + Fast Boat $3.50/5wk + Air $7/1wk; G2: Std Ocean + Air; G4: Ground only (Air dominated); G3/G5: Air only. The original v1 policy (cheapest + Air) omitted Fast Boat entirely.
 - **Why:** Matches the Kanban+Sea structure in the Objective sheet; the solver, not a heuristic, picks the cost/speed mix, so expedite-vs-stockout is an explicit, priced trade-off.
 
-## D13. Scenario allocation rule (V2 vs V4) — Status: Default (finalize with data)
-- **Options:** (a) proportional to forecast demand; (b) proportional to WOS shortfall (priority to the variant closer to stockout); (c) channel-commitment priority.
-- **Choice:** **(b)** — each constrained week, allocate the 4,500 units to equalize projected run-out WOS across V2 and V4 (a "fill the lowest tank first" waterline rule), tie-broken by forecast demand. Implemented inside the MILP via the shared cap + WOS penalties, so the solver discovers the waterline; the rule is stated and verified post-hoc.
-- **Why:** Proportional-to-demand ignores starting inventory (V2 and V4 enter the window with different cover); equalizing stockout risk minimizes the worst-case WOS breach, which is what the WOS-penalty objective encodes. Will be sanity-checked against (a) in the deck.
+## D13. Scenario allocation rule (V2 vs V4) — Status: Accepted (observed, Phase 4)
+- **Options:** (a) proportional to forecast demand; (b) WOS-shortfall equalization via the MILP objective; (c) channel-commitment priority.
+- **Choice:** **(b)** — the shared 4,500 u/wk cap is added as a hard constraint and the WOS-penalty objective decides the split; the rule is reported explicitly per week and verified post-hoc.
+- **Observed outcome (full solve):** the solver **alternates full 4,500-unit weeks** (V2, V4, V2, V4…) instead of splitting each week — batching preserves scarce pack-out slots — and over the 6-week window each variant receives exactly 13,500 u (a 50/50 split, consistent with their similar demand rates and starting cover). Headline deltas: volume −346 u (idle late-year capacity rebuilds the window deficit), freight −$76k (≈ solver-gap noise; report as "flat"), unmet demand +2 u, but the V2+V4 supply position **trails baseline until 2024W29** — a 6-week summer shortage leaves an ~8-month scar because no spare capacity exists to catch up sooner.
 
 ## D14. UI stack details — Status: Default
 - **Choice:** Next.js (App Router) + TypeScript + Tailwind CSS + **Recharts** + **better-sqlite3** (read-only). Three views per PRD F5.

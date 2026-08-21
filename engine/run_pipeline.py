@@ -63,7 +63,21 @@ def main(argv: list[str] | None = None) -> int:
         print(f"  unmet demand:     {info['total_short']:,.0f} u")
 
     if stages["scenario"]:
-        print("[scenario] not implemented yet (see docs/progress.md)")
+        from planz import scenario
+        t0 = time.perf_counter()
+        info = scenario.run(args.db)
+        dt = time.perf_counter() - t0
+        print(f"[scenario] V2+V4 enclosure shortage solved + validated in {dt:.0f}s")
+        print(f"  volume delta:  {info['volume_delta']:+,.0f} u")
+        print(f"  freight delta: ${info['freight_delta']:+,.0f}")
+        print(f"  unmet delta:   {info['short_delta']:+,.0f} u")
+        print(f"  supply position trails baseline through:"
+              f" {info['last_trailing_week']}")
+        print("  allocation of the 4,500 u/wk cap (V2 / V4):")
+        for a in info["allocation"]:
+            print(f"    {a['week']}: {a['v2_scen']:>7,.0f} /"
+                  f" {a['v4_scen']:>7,.0f}   (baseline"
+                  f" {a['v2_base']:,.0f} / {a['v4_base']:,.0f})")
     return 0
 
 
