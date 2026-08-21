@@ -11,7 +11,7 @@ Running log. Newest phase status at top of each section; check items off as they
 | 2 | Forecast: features, baselines, XGBoost quantiles, lifecycle, holdout scoring | ✅ Done (2026-08-21) |
 | 3 | MPS: MILP, pack-out, freight, WOS, constraint validators | ✅ Done (2026-08-21) |
 | 4 | Scenario: V2+V4 shared cap, allocation, diff computation | ✅ Done (2026-08-21) |
-| 5 | UI: forecast explorer, MPS view, scenario toggle + diff | ⬜ Not started |
+| 5 | UI: forecast explorer, MPS view, scenario toggle + diff | ✅ Done (2026-08-21) |
 | 6 | Packaging: deck (HTML), README, start scripts, cover note | ⬜ Not started |
 
 ## Phase 0 — Planning ✅ (2026-08-21)
@@ -60,12 +60,13 @@ Running log. Newest phase status at top of each section; check items off as they
 - [x] Both plans coexist plan-scoped in the same tables (`scenario_diff` table dropped as redundant — the UI diffs the two plan_ids directly)
 - [x] 51 tests green (reduced-universe scenario solve: cap binds in-window, catch-up beyond, baseline untouched)
 
-## Phase 5 — UI
+## Phase 5 — UI ✅ (2026-08-21)
 
-- [ ] Next.js scaffold, better-sqlite3 data layer, API routes
-- [ ] Forecast explorer (filters, interval shading, accuracy panel)
-- [ ] MPS view (pack-out grid, utilization, freight, WOS trajectories)
-- [ ] Scenario toggle + side-by-side diff view
+- [x] Next.js 16 (App Router, TS, Tailwind) + better-sqlite3 read-only data layer + 4 JSON API routes (`/api/meta|forecast|plan|scenario`)
+- [x] Forecast explorer: variant/geo/channel filters, actuals + P50 with P10/P90 band, holdout accuracy panel per selection
+- [x] MPS view: weekly production vs 17,280 cap, full 52×11 pack-out grid with slot counts, freight by geo×mode, WOS trajectories vs 12/13 targets, validator status
+- [x] Scenario view: instant toggle (both plans pre-solved), delta stats, allocation table, V2+V4 production + supply-position recovery charts, stockouts & per-geo WOS impact
+- [x] Verified: production build clean; all 4 APIs + 4 pages smoke-tested live (200s, correct shapes)
 
 ## Phase 6 — Packaging
 
