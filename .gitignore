@@ -25,3 +25,6 @@ Thumbs.db
 # Env
 .env
 .env.local
+
+# Excel lock files
+~$*.xlsx
