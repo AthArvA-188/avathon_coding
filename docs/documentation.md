@@ -10,7 +10,7 @@ Five sheets. All week labels in the workbook are **fiscal weeks**, not ISO calen
 
 - Fiscal year runs ≈ **October → September** (e.g. fiscal 2022 ≈ Oct 2021 – Sep 2022).
 - Evidence: pricing date 2021-07-20 maps to `YEAR_WEEK` 202143; Black Friday sits at fiscal week ~09 (late Nov); XMAS at fiscal week 13–14 (late Dec); Mother's Day at fiscal Q3 week 6 (May).
-- Quarters are 13 weeks: Q1 = W01–W13 (the holiday quarter: Black Friday, XMAS), Q2 = W14–W26, Q3 = W27–W39, Q4 = W40–W52. Column labels roll `2021W41 … 2021W52, 2022W01 …`, i.e. the label year increments at W01. The precise label↔quarter mapping is materialized in the `calendar` table by the ingest step and unit-tested against the Strong Seasonality Weeks sheet (which provides `CY_Qtr_Wk` ground truth like `2023_Q1_09`).
+- Quarters: Q1 = W01–W13 (the holiday quarter: Black Friday, XMAS), Q2 = W14–W26, Q3 = W27–W39, Q4 = W40–W52 — **except fiscal 2021, a 53-week year with a 14-week Q1** (boundaries W14/W27/W40/W53; see §6). Label year increments at W01. The label↔quarter mapping is materialized in the `calendar` table by ingest and unit-tested against the Strong Seasonality Weeks sheet (`CY_Qtr_Wk` ground truth like `2023_Q1_09`).
 
 ### 1.2 Sheets
 
@@ -120,7 +120,39 @@ avathon_coding/
 
 ## 6. How to run
 
-Placeholder — filled in Phase 1/6 (`start.ps1`/`start.sh`, pipeline CLI, `npm run dev`).
+```bash
+# one-time environment (conda)
+conda create -n avathon python=3.12 -y
+conda activate avathon
+pip install -r engine/requirements.txt
+
+# ingest xlsx -> planz.db (repo root)
+python engine/run_pipeline.py --ingest
+
+# tests
+cd engine && python -m pytest tests -q
+```
+
+Later stages: `--forecast`, `--mps`, `--scenario`, or `--all` (stubs until their phases land). `start.ps1`/`start.sh` wrappers arrive in Phase 6.
+
+### Data quirks found during ingest (Phase 1)
+
+| Quirk | Handling |
+| --- | --- |
+| 4 Ch3/G2 series duplicated under a tiny `Region 2_` SKU bucket with blank PPN (54 units lifetime total) | Kept as separate series; PPN derived from variant number; series key includes SKU (D20) |
+| 168 daily prices of exactly $0 (Retailer R2, V1–V4, 24 retailer-weeks) | Dropped pre-aggregation; those weeks peer-filled (D21) |
+| Date 2022-02-28 duplicated in the pricing extract for 15 retailer-variant pairs | Day-mean first, then week-mean, so the day weighs once (D21) |
+| Retailer carry windows differ (R1/R2/R3 start V1–V4 at 2022W04; R3 delists 2023W47; V5–V7 R4-only) | Price fill bounded to each pair's observed span; sole-carrier gaps carry own last price forward, `is_filled` ∈ {0,1,2} (D21) |
+| V12 shows 1 unit of ST+SI at 2023W18, after its 2022W14 sell-out | Kept as-is; tests assert post-EOL activity ≤ 1 unit |
+| V5–V7 have no stated release week yet first sell at 2022W43 | `release_week NULL` = "not stated"; selling windows must be derived from actuals |
+| Fiscal-2024 Promo Q4 seasonality rows internally inconsistent | Stored as given with `is_consistent=0` flag; excluded from strict calendar test; client question (D22) |
+| Pricing dates map to weeks as Fri–Thu (through 2022W22) then Thu–Wed — not Mon–Sun | `calendar.approx_monday` is display-only; nothing joins daily dates onto weeks via it |
+
+### Calendar subtleties (verified in Phase 1)
+
+- **Fiscal 2021 has 53 weeks and a 14-week Q1** (quarter boundaries 2021: W14/W27/W40/W53; other years: W13/W26/W39/W52). Ground truth: the seasonality sheet maps 2021 XMAS to `2021_Q1_14` ↔ `2021_14` while 2022+ map XMAS to Q1 week 13. Consequence: the dataset starts exactly at a quarter boundary (2021W41 = 2021Q4W1) and actuals end exactly at one (2023W39 = 2023Q3W13).
+- **Pricing extends into the forecast window** (through fiscal 2024W27; calendar dates to 2024-03-29) — future promo prices are known-ahead features for the forecast layer.
+- Approximate calendar dates anchor on fiscal 2021W43 ⊇ 2021-07-20 (pricing launch), weeks Mon–Sun; display-only.
 
 ## 7. Glossary
 

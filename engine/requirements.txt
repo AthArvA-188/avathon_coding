@@ -1,0 +1,7 @@
+numpy>=1.26
+pandas>=2.2
+openpyxl>=3.1
+xgboost>=2.1
+pulp>=2.8
+scikit-learn>=1.5
+pytest>=8.0

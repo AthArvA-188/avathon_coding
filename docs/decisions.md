@@ -29,10 +29,10 @@ Format: each decision lists the options considered, the choice, and why. Status 
 - **Choice:** **(c)** — remote: `https://github.com/AthArvA-188/avathon_coding.git`. `program_z.xlsx` is committed so the repo is runnable stand-alone.
 - **Why:** Owner's call; no gh CLI on this machine.
 
-## D6. Python environment — Status: Default
-- **Options:** (a) Python 3.13 (system, has pip) + `venv` + `requirements.txt`; (b) Python 3.12 via miniconda; (c) install `uv`.
-- **Choice:** **(a)** — `py -3.13`-created venv in `engine/.venv`, pinned `requirements.txt`.
-- **Why:** 3.13 is the only non-conda install with pip present; xgboost/pandas/pulp all support it. No new tooling for the reviewer.
+## D6. Python environment — Status: User (updated 2026-08-21)
+- **Options:** (a) Python 3.13 system + `venv`; (b) dedicated conda env; (c) install `uv`.
+- **Choice:** **(b)** — conda env **`avathon`** (Python 3.12), clean install from `engine/requirements.txt`. Owner requested conda explicitly.
+- **Why:** Reproducible, isolated from system Pythons; miniconda already present. Resolved versions on this machine: numpy 2.5, pandas 3.0, xgboost 3.4, pulp 3.3.
 
 ## D7. Forecast grain — Status: Default
 - **Options:** (a) model at SKU × Geo × Channel (customers pre-aggregated); (b) model at customer level, aggregate up.
@@ -91,6 +91,22 @@ Format: each decision lists the options considered, the choice, and why. Status 
 - **Choice:** **(b)** — Channels 1 & 2: SI ≡ ST (stated in Objective). Channel 3: SI = ST + Δ(reseller inventory) driving reseller stock toward 13 WOS.
 - **Why:** Forecasting SI independently can contradict the SI=ST identity and double-count the reseller buffer; deriving it keeps the plan internally consistent and makes Channel 3 inventory drift a first-class scenario output.
 
+## D20. Duplicate 'Region 2_' series (data quirk) — Status: Default
+- **Found:** 4 Channel 3 / Geo G2 series (V1–V4) appear twice — once under regular `G2_000x` SKUs (~9k–29k units each) and once under a tiny `Region 2_` bucket (4–18 units lifetime) with blank PPN.
+- **Options:** (a) merge into the main series; (b) keep as separate series, PPN derived from the variant number; (c) drop (loses 54 units).
+- **Choice:** **(b)** — source fidelity; the series-unique key includes SKU; they aggregate away at the forecast grain anyway.
+
+## D21. Price cleaning & fill policy — Status: Default (revised after adversarial review)
+- **Found:** 168 daily rows (Retailer R2, V1–V4) with placeholder $0 prices; the date 2022-02-28 duplicated for 15 retailer-variant pairs; retailers have real carry windows (R1/R2/R3 start V1–V4 only at 2022W04, R3 delists at 2023W47, V5–V7 are R4-only).
+- **Original v1 fill** (full 4-retailer × variant-week grid) fabricated 830 out-of-window prices — caught by the Phase 1 review workflow and replaced.
+- **Choice:** (1) drop non-positive daily prices; (2) average per **day** first, then days into weeks (kills the duplicate-date double-weighting); (3) fill **only interior gaps within each retailer-variant pair's own observed span** — peer mean where a same-week peer exists (`is_filled=1`, 74 rows, incl. all 24 R2 zero-weeks), otherwise carry the pair's own last price forward (`is_filled=2`, 53 rows, sole-carrier V5–V7 gaps). Result: 2,199 truthful weekly rows, no invented retailer-variant pairs.
+- **Why:** the Objective's "missing price in a week" rule presumes the retailer carries the product that week; extrapolating beyond carry windows would feed the forecast a fictional 4-retailer price landscape and mask R3's exit.
+
+## D22. Fiscal-2024 Promo Q4 seasonality rows — Status: Default (client question)
+- **Found:** the sheet's two fiscal-2024 Promo Q4 rows are internally inconsistent (`2024_Q4_02`↔`2024_42` implies Q4 starts W41; `2024_Q4_03`↔`2024_44` implies W42; every other 2024 row implies the standard W40).
+- **Choice:** treat fiscal 2024 as a standard 52-week year; store the rows as given (they lie beyond both the data range and the horizon); exclude the two rows from the strict calendar test; raise with the client.
+
 ## D19. Horizon & calendar interpretation — Status: Default
 - **Choice:** Actuals end **2023W39** (per the file, 104 filled weeks — the brief's "2023W26" text is stale). Horizon = **2023W40 → 2024W39** (52 weeks = 4 fiscal quarters of 13). Week labels are **fiscal** (FY starts ~calendar October; evidence: Black Friday = fiscal W09, XMAS = fiscal W13–14, pricing date 2021-07-20 ↔ fiscal 2021W43). CQ = fiscal quarter ending 2023W39, so the shortage window is **2023W40–2023W45**.
+- **Verified in Phase 1:** fiscal 2021 is a 53-week year with a **14-week Q1** (quarter boundaries W14/W27/W40/W53; all other years W13/W26/W39/W52) — proven against the seasonality sheet's `CY_Qtr_Wk` column and unit-tested. The dataset starts and ends exactly on quarter boundaries.
 - **Why:** Follow the data over the prose; the fiscal reading makes every holiday land where retail reality puts it.

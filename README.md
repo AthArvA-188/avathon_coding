@@ -18,7 +18,20 @@ Take-home submission: 4-quarter demand forecast, MPS + pack-out plan, and V2+V4 
 
 ## Quick start
 
-Placeholder — will become: one command to set up (`start.ps1` / `start.sh`), one to ingest + compute (`python engine/run_pipeline.py --all`), one to launch the UI (`npm run dev` in `app/`).
+```bash
+# 1. environment (conda; Python 3.12)
+conda create -n avathon python=3.12 -y
+conda activate avathon
+pip install -r engine/requirements.txt
+
+# 2. ingest program_z.xlsx -> planz.db
+python engine/run_pipeline.py --ingest
+
+# 3. tests
+cd engine && python -m pytest tests -q
+```
+
+Forecast (`--forecast`), MPS (`--mps`), scenario (`--scenario`), and the Next.js UI land in later phases — see [`docs/progress.md`](docs/progress.md). One-command `start.ps1`/`start.sh` wrappers arrive with the UI.
 
 ## Repository layout
 
