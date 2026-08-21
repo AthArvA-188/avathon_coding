@@ -24,11 +24,14 @@ conda create -n avathon python=3.12 -y
 conda activate avathon
 pip install -r engine/requirements.txt
 
-# 2. ingest program_z.xlsx -> planz.db
-python engine/run_pipeline.py --ingest
+# 2. run the pipeline: ingest -> forecast -> MPS
+python engine/run_pipeline.py --ingest --forecast --mps
 
 # 3. tests
 cd engine && python -m pytest tests -q
+
+# 4. independent spot checks (shares no code with the pipeline)
+python engine/verify.py
 ```
 
 Forecast (`--forecast`), MPS (`--mps`), scenario (`--scenario`), and the Next.js UI land in later phases — see [`docs/progress.md`](docs/progress.md). One-command `start.ps1`/`start.sh` wrappers arrive with the UI.
