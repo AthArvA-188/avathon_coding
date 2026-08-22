@@ -31,7 +31,7 @@ import re
 from . import features as ft
 from . import params
 
-PROMPT_VERSION = "v2"
+PROMPT_VERSION = "v3"
 H = 52
 H_BASE = ft.offset_of(params.HORIZON_START)      # derived, not hardcoded
 
@@ -47,18 +47,35 @@ KNOWN_MODES = {"Air", "Ground", "Fast Boat Ocean", "Standard Ocean"}
 MULT_MIN, MULT_MAX = 0.2, 5.0
 
 CLAUDE_PROMPT = f"""You are a demand-planning signal extractor (prompt {PROMPT_VERSION}).
-Read the message and emit a JSON array of planning events. Event types and
-required params:
-- supply_cap: variants (list like ["Variant V2"]), start_offset, n_weeks, weekly_cap
-- demand_shock: variant, geo, start_offset, n_weeks, multiplier
-- freight_disruption: geo, mode, start_offset, n_weeks
-start_offset counts weeks from the planning horizon start, 2023W40 (fiscal
-calendar; "next quarter" = 2023Q4 = offsets 0-12; fiscal 2024Q1 starts at
-offset 13; week label 2023W44 = offset 4, 2024W02 = offset 14). Retailers
-R1-R4 sell in Geo G1. "Core variants" = V1-V4. For each event also return
-"evidence" (an exact quote copied verbatim from the message) and
-"confidence" (0-1). Return [] if the message contains no actionable planning
-event. Flat JSON objects only, no prose, no markdown fences."""
+Read the message and emit ONLY a JSON array of planning events (no prose, no
+markdown fences). Each event is a FLAT object with these exact keys:
+
+supply_cap:         event_type, variants, start_offset, n_weeks, weekly_cap,
+                    evidence, confidence
+demand_shock:       event_type, variant, geo, start_offset, n_weeks,
+                    multiplier, evidence, confidence
+freight_disruption: event_type, geo, mode, start_offset, n_weeks,
+                    evidence, confidence
+
+Strict rules:
+- Entity names EXACTLY as: "Variant V1".."Variant V12"; "Geo G1".."Geo G5";
+  mode one of "Air", "Ground", "Fast Boat Ocean", "Standard Ocean".
+- start_offset counts weeks from the horizon start 2023W40 (= offset 0),
+  fiscal calendar: "next quarter" = 2023Q4 = offsets 0-12 (13 weeks);
+  fiscal 2024Q1 starts at offset 13; 2023W44 = 4; 2024W02 = 14. A range like
+  "2024W02-2024W03" is inclusive: start_offset 14, n_weeks 2.
+- demand_shock: geo is REQUIRED. Retailers R1-R4 sell in Geo G1, so a
+  retailer-level statement maps to "Geo G1". multiplier is a ratio
+  ("double" = 2.0, "a 20% uplift" = 1.2, "down 30%" = 0.7).
+- A statement about several variants ("core variants" = V1-V4) becomes ONE
+  demand_shock PER variant, identical except for the variant.
+- evidence = one sentence copied VERBATIM from the message (character-exact).
+- Return [] if the message has no actionable planning event.
+
+Example output:
+[{{"event_type": "demand_shock", "variant": "Variant V3", "geo": "Geo G1",
+   "start_offset": 0, "n_weeks": 13, "multiplier": 2.0,
+   "evidence": "…exact sentence…", "confidence": 0.9}}]"""
 
 
 def _n(week_label: str) -> int:
@@ -222,10 +239,13 @@ def _extract_claude(text: str) -> list[dict]:
                  flags=re.MULTILINE).strip()
     out = []
     for e in json.loads(raw):
+        # tolerate both flat objects and a nested {"params": {...}} shape
+        inner = e.get("params") if isinstance(e.get("params"), dict) else {
+            k: v for k, v in e.items()
+            if k not in ("event_type", "evidence", "confidence")}
         out.append({
             "event_type": e.get("event_type"),
-            "params": {k: v for k, v in e.items()
-                       if k not in ("event_type", "evidence", "confidence")},
+            "params": inner,
             "evidence": str(e.get("evidence", ""))[:500],
             "confidence": e.get("confidence", 0.0)})
     return out
