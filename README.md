@@ -48,6 +48,7 @@ cd ../app && npm install && npm run dev    # UI on http://localhost:3000
 | `engine/planz/features.py` + `forecast.py` | Feature builder + XGBoost P10/P50/P90 with recursive 52-week prediction and holdout backtest |
 | `engine/planz/lifecycle.py` | NPI analog launch ramps (V10/V11), EOL, volume-cap enforcement |
 | `engine/planz/mps.py` + `wos.py` | MILP (weekly/quarterly caps, ≤4 pack-out slots, two-tier WOS inventory, freight frontier) + run-out WOS |
+| `engine/planz/heuristic.py` | The second planning method: a transparent greedy plan, same validators — run `--heuristic` for the head-to-head vs the MILP |
 | `engine/planz/validate.py` | 9 independent post-solve constraint checks — the pipeline fails on any violation |
 | `engine/planz/scenario.py` | V2+V4 shared-cap re-solve + baseline diff |
 | `engine/verify.py` | Human-friendly auditor: 14 checks sharing no code with the pipeline |
@@ -66,6 +67,9 @@ cd ../app && npm install && npm run dev    # UI on http://localhost:3000
   $4.68M is air expedite, effectively the price of the missing capacity.
 - Shortage scenario: only −346 u of volume lost, but the V2+V4 supply position
   **trails baseline until 2024W29** — a 6-week shortage leaves an ~8-month scar.
+- Two planning methods, one verdict: the greedy heuristic is cheaper ($4.62M
+  freight) and simpler, but leaves **99,455 u unmet vs the MILP's 0** — the
+  measured price of skipping cross-week lookahead in a capacity-starved year.
 
 ## Known limitations
 
@@ -82,4 +86,6 @@ cd ../app && npm install && npm run dev    # UI on http://localhost:3000
 Every decision, with the options considered, lives in
 [`docs/decisions.md`](docs/decisions.md); the phase-by-phase build log in
 [`docs/progress.md`](docs/progress.md); data dictionary and schemas in
-[`docs/documentation.md`](docs/documentation.md).
+[`docs/documentation.md`](docs/documentation.md); and the ten big decisions as
+rehearsable 30-second stories in
+[`docs/talking-points.md`](docs/talking-points.md).

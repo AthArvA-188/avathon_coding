@@ -77,6 +77,12 @@ Running log. Newest phase status at top of each section; check items off as they
 - [x] Independent fact-check agent run over every deck number vs the live DB
 - [x] Verification companions shipped earlier this phase group: `engine/verify.py` + published Verifier's Guide artifact
 
+## Post-phase additions (2026-08-21)
+
+- [x] **Second planning method** (`planz/heuristic.py`, D26): transparent greedy plan through the same validators; head-to-head vs MILP via `--heuristic` — greedy $4.62M freight / 99,455 u unmet vs MILP $5.22M / 0 u. 54 tests green.
+- [x] `docs/talking-points.md`: the ten big decisions as rehearsable problem→options→choice→evidence→pushback stories
+- [x] decisions.md restored to numeric order; deck slide 8 updated with the two-method comparison
+
 ## Notes / blockers
 
 - gh CLI absent — remote managed via plain git + owner-created repo (resolved).

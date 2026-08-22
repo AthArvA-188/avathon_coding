@@ -26,11 +26,13 @@ def main(argv: list[str] | None = None) -> int:
     ap.add_argument("--forecast", action="store_true", help="(phase 2)")
     ap.add_argument("--mps", action="store_true", help="(phase 3)")
     ap.add_argument("--scenario", action="store_true", help="(phase 4)")
+    ap.add_argument("--heuristic", action="store_true",
+                    help="second method: greedy plan + comparison vs MILP")
     ap.add_argument("--all", action="store_true", help="run every stage")
     args = ap.parse_args(argv)
 
     stages = {k: (getattr(args, k) or args.all)
-              for k in ("ingest", "forecast", "mps", "scenario")}
+              for k in ("ingest", "forecast", "mps", "scenario", "heuristic")}
     if not any(stages.values()):
         ap.error("pick at least one stage (e.g. --ingest or --all)")
 
@@ -78,6 +80,20 @@ def main(argv: list[str] | None = None) -> int:
             print(f"    {a['week']}: {a['v2_scen']:>7,.0f} /"
                   f" {a['v4_scen']:>7,.0f}   (baseline"
                   f" {a['v2_base']:,.0f} / {a['v4_base']:,.0f})")
+
+    if stages["heuristic"]:
+        from planz import heuristic
+        t0 = time.perf_counter()
+        heuristic.run(args.db)
+        dt = time.perf_counter() - t0
+        print(f"[heuristic] greedy plan built + validated in {dt:.0f}s")
+        print(f"  {'plan':<10} {'production':>12} {'freight':>12}"
+              f" {'unmet':>8} {'medWOSsup':>10} {'medWOSch':>9}")
+        for p, prod, cost, short, ws, wc in heuristic.compare(args.db):
+            print(f"  {p:<10} {prod:>12,.0f} {'$' + format(cost, ',.0f'):>12}"
+                  f" {short:>8,.0f}"
+                  f" {format(ws, '.1f') if ws is not None else '-':>10}"
+                  f" {format(wc, '.1f') if wc is not None else '-':>9}")
     return 0
 
 

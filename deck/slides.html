@@ -236,6 +236,12 @@
       (with mutation testing) hardened this: they proved a do-nothing plan
       passed the original checks, found a phantom-shipment exploit and a
       missing freight mode — all fixed before the results you're reading.</p>
+      <p style="font-size:14px"><b>And a second method keeps it honest:</b> a
+      transparent greedy heuristic (the plan a human would build by hand) runs
+      through the same validators. It's cheaper ($4.62M freight) and holds
+      fatter buffers — but leaves <b>99,455 units unmet vs the MILP's zero</b>.
+      Cross-week lookahead is worth real money in a capacity-starved year;
+      that's the measured reason the optimizer ships as primary.</p>
     </div>
   </div>
 </section>
