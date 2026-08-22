@@ -85,9 +85,11 @@ avathon_coding/
 │   │   ├── lifecycle.py        # NPI ramps, EOL, lifetime caps
 │   │   ├── wos.py              # run-out WOS calculator
 │   │   ├── mps.py              # PuLP MILP + freight assignment
+│   │   ├── heuristic.py        # second method: greedy plan (D26)
 │   │   ├── validate.py         # independent constraint validators
 │   │   ├── scenario.py         # V2+V4 shared-cap re-solve + diff
 │   │   └── db.py               # schema, writers, readers
+│   ├── verify.py               # 14-check independent auditor
 │   └── tests/
 ├── app/                        # Next.js (App Router, TS, Tailwind, Recharts)
 └── deck/                       # HTML slide deck

@@ -32,7 +32,7 @@ pip install -r engine/requirements.txt
 
 python engine/run_pipeline.py --all        # or --ingest --forecast --mps --scenario
 
-cd engine && python -m pytest tests -q     # 51 tests, ~20 s
+cd engine && python -m pytest tests -q     # 54 tests, ~25 s
 python engine/verify.py                    # 14 independent spot checks
 
 cd ../app && npm install && npm run dev    # UI on http://localhost:3000
