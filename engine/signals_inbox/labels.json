@@ -15,6 +15,16 @@
                 "start_offset": 4, "n_weeks": 4}}
   ],
   "analyst_note.txt": [],
+  "carrier_notice.png": [
+    {"event_type": "freight_disruption",
+     "params": {"geo": "Geo G4", "mode": "Air",
+                "start_offset": 8, "n_weeks": 2}}
+  ],
+  "promo_flyer.png": [
+    {"event_type": "demand_shock",
+     "params": {"variant": "Variant V2", "geo": "Geo G3", "start_offset": 22,
+                "n_weeks": 2, "multiplier": 1.3}}
+  ],
   "promo_update.txt": [
     {"event_type": "demand_shock",
      "params": {"variant": "Variant V1", "geo": "Geo G2", "start_offset": 14,

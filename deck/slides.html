@@ -377,19 +377,22 @@
   <h2>LLM signals and agentic loops — built, not sketched</h2>
   <div class="cols">
     <div>
-      <p style="margin-top:0"><b>LLM-augmented signals (working).</b> A fixture
-      inbox of supplier emails and analyst notes flows through a pluggable
-      extractor (Claude when a key is present; a deterministic stand-in
-      otherwise, so reviewers run offline) into typed events — supply caps,
-      demand shocks, freight disruptions. Every event carries its source,
-      quoted evidence, prompt version and confidence; <b>nothing touches a
-      plan until a human approves it</b>; an eval harness scores the extractor
-      against labeled fixtures (100% precision/recall) before it is trusted.
-      Approved events compile into the same hooks the V2+V4 scenario uses.
-      A red-team review then attacked the gates — prompt-injected demand
-      shocks, fabricated evidence, wiped approvals — and every confirmed hole
-      was closed: sanitize boundary, verbatim-evidence rule, a 15%
-      demand-delta guard that forces human sign-off, staged plan promotion.</p>
+      <p style="margin-top:0"><b>LLM-augmented signals (working) — text and
+      images.</b> A fixture inbox of supplier emails, analyst notes and
+      <b>pictures</b> (a scanned carrier notice, a promo flyer) flows through
+      a pluggable extractor (Claude when a key is present; a deterministic
+      stand-in otherwise, so reviewers run offline) into typed events —
+      supply caps, demand shocks, freight disruptions. Every event carries
+      its source, quoted evidence, prompt version and confidence; image
+      events add the model's verbatim transcription and the image's content
+      hash, so the human can compare read vs picture. <b>Nothing touches a
+      plan until a human approves it</b>; an eval harness scores the
+      extractor against labeled fixtures (100% precision/recall, incl. the
+      images) before it is trusted. A red-team review attacked the gates —
+      prompt-injected demand shocks, fabricated evidence, wiped approvals —
+      and every confirmed hole was closed; the flyer fixture even carries a
+      planted "ignore previous instructions" line the vision model reads,
+      records and refuses.</p>
     </div>
     <div>
       <p style="margin-top:0"><b>Agentic loop (working) — one real trace:</b></p>
@@ -413,7 +416,8 @@
   <div class="kicker">Where this stack goes · 3 of 3 — <b>prototyped, in the app</b></div>
   <h2>A conversational planner that cannot break the rules</h2>
   <p><b>“Ask the Planner”</b> (<code>/planner</code>): speak or type a question —
-  Web Speech API on-device, so no audio leaves the machine. claude-sonnet-5
+  speech-to-text is the browser's job (Web Speech API), so audio never
+  touches our backend or the Anthropic API. claude-sonnet-5
   classifies it into a typed intent; a regex fallback runs offline. The LLM
   never writes SQL or numbers — every answer comes from whitelisted queries
   against <code>planz.db</code>, and the executed SQL is shown with the answer.</p>
@@ -449,8 +453,8 @@
     followed the file.</li>
   </ul>
   <p class="foot">Everything reproducible: ./start.sh · python engine/verify.py
-  (14 independent checks) · 66 tests · two planning methods compared
-  (--heuristic) · signals + agentic loop + voice planner prototypes (--signals / --agents / app /planner) · docs/decisions.md D1–D29 · per-phase commit history incl.
+  (14 independent checks) · 79 tests · two planning methods compared
+  (--heuristic) · signals (text + image) + agentic loop + voice planner prototypes (--signals / --agents / app /planner) · docs/decisions.md D1–D30 · per-phase commit history incl.
   what adversarial review caught</p>
 </section>
 

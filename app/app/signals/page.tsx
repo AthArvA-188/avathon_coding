@@ -6,6 +6,7 @@ type Signal = {
   id: number; source: string; event_type: string; evidence: string;
   backend: string; prompt_version: string; confidence: number; status: string;
   facts: [string, string][]; label_match: boolean;
+  transcription: string; source_sha256: string;
 };
 type Data = { available: boolean; signals: Signal[] };
 
@@ -44,15 +45,15 @@ export default function SignalsPage() {
     <div>
       <h1 className="text-xl font-semibold mb-1">Signals</h1>
       <p className="text-sm text-zinc-500 dark:text-zinc-400 mb-4 max-w-2xl">
-        Unstructured planner messages (supplier emails, retailer notes,
-        carrier advisories) turned into typed, auditable planning events.
-        Approval is a human act; the agentic loop that consumes these lives on
-        its own page.
+        Unstructured planner messages — text or images (supplier emails,
+        retailer notes, scanned carrier advisories, promo flyers) — turned
+        into typed, auditable planning events. Approval is a human act; the
+        agentic loop that consumes these lives on its own page.
       </p>
 
       <Provenance
         sources="signals table in planz.db, extracted from the message files in engine/signals_inbox/; expectations from labels.json (the eval ground truth)."
-        model="Pluggable extractor (llm.py): claude-sonnet-5 when ANTHROPIC_API_KEY is set, offline rules-v1 otherwise — the backend column shows which produced each row. Every event passes a sanitize boundary (known entities, horizon bounds, multiplier limits) and the evidence quote must appear verbatim in the source or confidence drops to 0."
+        model="Pluggable extractor (llm.py): claude-sonnet-5 when ANTHROPIC_API_KEY is set, offline rules-v1 otherwise — the backend column shows which produced each row. Text events: a quote that isn't verbatim in the source file drops confidence to 0. Image events (+vision rows) can't get that guarantee — the model authors both the events and the transcription they're checked against — so their confidence is capped at 0.75, below the 0.8 batch-approve floor: a human must approve each one by row id (--approve-signal <id>) after comparing the stored transcription and image hash with the file. Every event passes the same sanitize boundary (known entities, horizon bounds, multiplier limits)."
         params={[
           "Auto-approval floor: confidence ≥ 0.8 — and only when explicitly requested",
           "Statuses survive re-extraction (content-hash keyed); rejections are permanent",
@@ -91,6 +92,18 @@ export default function SignalsPage() {
             <p className="text-[12.5px] text-zinc-500 dark:text-zinc-400 italic mb-3">
               “{s.evidence}”
             </p>
+            {s.transcription && (
+              <details className="mb-3 text-[12px] text-zinc-500 dark:text-zinc-400">
+                <summary className="cursor-pointer select-none">
+                  image transcription (what the vision model read — compare it
+                  with <code className="font-mono">engine/signals_inbox/{s.source}</code>{" "}
+                  before approving via --approve-signal {s.id})
+                </summary>
+                <pre className="mt-2 whitespace-pre-wrap font-sans text-[12px] rounded-md bg-zinc-100 dark:bg-zinc-800 p-2.5">
+                  {s.transcription}
+                </pre>
+              </details>
+            )}
             <div className="flex items-center gap-2">
               <span className={`px-2 py-0.5 rounded-full text-[11px] font-medium ${statusStyle[s.status] ?? ""}`}>
                 {s.status}

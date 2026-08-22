@@ -38,7 +38,13 @@ def main(argv: list[str] | None = None) -> int:
                     help="explicitly allow the loop to auto-approve extracted"
                          " events above the confidence floor (demo mode)")
     ap.add_argument("--approve-signals", action="store_true",
-                    help="HUMAN GATE: approve pending events >= 0.8 confidence")
+                    help="HUMAN GATE: approve pending events >= 0.8 confidence"
+                         " (image events sit below this floor by design)")
+    ap.add_argument("--approve-signal", action="append", type=int,
+                    metavar="ID",
+                    help="HUMAN GATE: approve ONE pending event by row id"
+                         " (repeatable) — required for image events, after"
+                         " comparing the stored transcription with the image")
     ap.add_argument("--reject-signals", action="store_true",
                     help="HUMAN GATE: reject all pending events (survives"
                          " re-extraction)")
@@ -50,7 +56,7 @@ def main(argv: list[str] | None = None) -> int:
     stages["signals"] = args.signals            # explicit-only prototypes
     stages["agents"] = args.agents
     if not (any(stages.values()) or args.approve_signals
-            or args.reject_signals):
+            or args.approve_signal or args.reject_signals):
         ap.error("pick at least one stage (e.g. --ingest or --all)")
 
     if stages["ingest"]:
@@ -114,18 +120,36 @@ def main(argv: list[str] | None = None) -> int:
 
     if stages["signals"]:
         from planz import signals
-        found = signals.extract_inbox(args.db)
+        skipped: list = []
+        found = signals.extract_inbox(args.db, skipped_out=skipped)
         print(f"[signals] {len(found)} events extracted (pending approval)")
+        for name, reason in skipped:
+            print(f"  {name:<26} SKIPPED ({reason}) — existing pending"
+                  " rows for it are preserved")
         for e in found:
             print(f"  {e['source']:<26} {e['event_type']:<19}"
                   f" conf {e['confidence']:.2f}  {e['params']}")
         ev = signals.evaluate()
         print(f"  eval vs labeled fixtures [{ev['backend']}]:"
               f" precision {ev['precision']:.0%}, recall {ev['recall']:.0%}")
+        if ev.get("skipped"):
+            print(f"  {len(ev['skipped'])} image fixture(s) skipped —"
+                  f" vision needs ANTHROPIC_API_KEY:"
+                  f" {', '.join(ev['skipped'])}")
 
     if args.approve_signals:
         from planz import signals
-        print(f"[signals] {signals.approve(args.db)} events approved (human)")
+        print(f"[signals] {signals.approve(args.db)} events approved (human;"
+              " image events are excluded — approve those one-by-one with"
+              " --approve-signal <id>)")
+
+    if args.approve_signal:
+        from planz import signals
+        for sid in args.approve_signal:
+            n = signals.approve_one(args.db, sid)
+            print(f"[signals] id {sid}: "
+                  + ("approved (human, targeted)" if n else
+                     "not approved — no pending row with that id"))
 
     if args.reject_signals:
         from planz import signals

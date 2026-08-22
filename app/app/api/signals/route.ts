@@ -42,9 +42,18 @@ export function GET() {
     labels = {};
   }
 
+  // vision provenance columns (D30) — older DBs may predate the migration
+  const cols = new Set(
+    rows<{ name: string }>("SELECT name FROM pragma_table_info('signals')")
+      .map((r) => r.name)
+  );
+  const visionSel = cols.has("transcription") && cols.has("source_sha256")
+    ? "transcription, source_sha256"
+    : "'' AS transcription, '' AS source_sha256";
+
   const signals = rows(
     `SELECT id, source, event_type, params_json, evidence, backend,
-            prompt_version, confidence, status, created_at
+            prompt_version, confidence, status, created_at, ${visionSel}
      FROM signals ORDER BY source, id`
   ).map((s) => {
     const p = JSON.parse(s.params_json as string) as Record<string, unknown>;
@@ -64,6 +73,8 @@ export function GET() {
     if (p.weekly_cap)
       facts.push(["cap", `${Number(p.weekly_cap).toLocaleString("en-US")} u/wk`]);
     if (p.multiplier) facts.push(["multiplier", `×${p.multiplier}`]);
+    if (s.source_sha256)
+      facts.push(["image sha256", `${String(s.source_sha256).slice(0, 12)}…`]);
 
     const expected = labels[s.source as string] ?? [];
     const label_match = expected.some(

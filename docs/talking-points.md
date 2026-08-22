@@ -2,7 +2,7 @@
 
 Every story has the same five beats: **the problem → the options → what I
 picked → the number that proves it → the pushback answer**. Rehearse the
-beats, not the words. Full detail behind each: `docs/decisions.md` (D1–D29).
+beats, not the words. Full detail behind each: `docs/decisions.md` (D1–D30).
 
 ---
 
@@ -102,7 +102,7 @@ finished-goods plan can't absorb it.
 
 ## 10. How do you know any of this is correct?
 
-**Answer, in layers:** 66 tests (with double-entry expected values), 9
+**Answer, in layers:** 73 tests (with double-entry expected values), 9
 independent validators after every solve (incl. replaying all inventory math
 from shipments), `verify.py` — a 14-check auditor sharing no code with the
 pipeline — and two adversarial review rounds that mutation-tested the suite

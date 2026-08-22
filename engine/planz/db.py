@@ -216,7 +216,11 @@ CREATE TABLE IF NOT EXISTS signals (
     status         TEXT NOT NULL CHECK (status IN
                        ('pending', 'approved', 'rejected')),
     created_at     TEXT NOT NULL,
-    content_hash   TEXT NOT NULL         -- re-extraction upserts on this key
+    content_hash   TEXT NOT NULL,        -- re-extraction upserts on this key
+    transcription  TEXT NOT NULL DEFAULT '',  -- vision rows: the model's
+                                         -- verbatim read of the image, kept so
+                                         -- the human gate can compare it
+    source_sha256  TEXT NOT NULL DEFAULT ''   -- vision rows: hash of the image
 );
 
 CREATE UNIQUE INDEX IF NOT EXISTS idx_signals_hash ON signals(content_hash);
@@ -255,6 +259,12 @@ def init_signals_schema(conn: sqlite3.Connection) -> None:
         cols = {r[1] for r in conn.execute("PRAGMA table_info(signals)")}
         if "content_hash" not in cols:
             conn.execute("DROP TABLE signals")
+        else:
+            # additive migration: vision provenance columns (D30)
+            for col in ("transcription", "source_sha256"):
+                if col not in cols:
+                    conn.execute(f"ALTER TABLE signals ADD COLUMN {col}"
+                                 " TEXT NOT NULL DEFAULT ''")
     _run_script(conn, SIGNALS_SCHEMA)
 
 
