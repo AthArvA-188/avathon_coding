@@ -15,8 +15,17 @@ a human approval gate and an eval harness), an agentic planning loop
 conversational planner (voice or text → intent → whitelisted SQL). Foundation
 forecasting models are argued in the deck, not yet prototyped.
 
-**What I'd build with another week.** A Chronos/TimesFM head-to-head on the
-same holdout harness (the one §3.4 thread left as a stance); live re-solve
+**What I'd build with another week.** The fourth §3.4 thread, made
+measurable: a foundation-model head-to-head — Chronos, TimesFM and an
+LLM-forecaster beside the shipped XGBoost — on the *same* 13-week holdout
+harness, landing in **one results table** (WAPE, bias, pinball@P10/P90, per
+segment and horizon) so "which model is better" becomes a measured verdict,
+not a stance. The same treatment for the agentic side: more specialist
+agents than today's forecast/signal/planner/verifier roles — demand-sensing,
+inventory-rebalancing, freight-cost negotiation — each with pluggable LLM
+backends, every configuration run through the identical validators and eval
+harness into the same scoreboard, so the multi-agent design is chosen on
+evidence the way prompt v3 beat v2. Then the operational list: live re-solve
 from the browser so an approved what-if re-plans in-app instead of via the
 CLI; rolling-origin backtesting; a Channel-3 reseller-drift curve in the
 scenario view; and a cost curve for the WOS-target-vs-air-freight dial, the
