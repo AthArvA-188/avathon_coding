@@ -92,6 +92,11 @@ Format: each decision lists the options considered, the choice, and why. Status 
 - **Choice:** **(b)** — Channels 1 & 2: SI ≡ ST (stated in Objective). Channel 3: SI = ST + Δ(reseller inventory) driving reseller stock toward 13 WOS.
 - **Why:** Forecasting SI independently can contradict the SI=ST identity and double-count the reseller buffer; deriving it keeps the plan internally consistent and makes Channel 3 inventory drift a first-class scenario output.
 
+## D19. Horizon & calendar interpretation — Status: Default
+- **Choice:** Actuals end **2023W39** (per the file, 104 filled weeks — the brief's "2023W26" text is stale). Horizon = **2023W40 → 2024W39** (52 weeks = 4 fiscal quarters of 13). Week labels are **fiscal** (FY starts ~calendar October; evidence: Black Friday = fiscal W09, XMAS = fiscal W13–14, pricing date 2021-07-20 ↔ fiscal 2021W43). CQ = fiscal quarter ending 2023W39, so the shortage window is **2023W40–2023W45**.
+- **Verified in Phase 1:** fiscal 2021 is a 53-week year with a **14-week Q1** (quarter boundaries W14/W27/W40/W53; all other years W13/W26/W39/W52) — proven against the seasonality sheet's `CY_Qtr_Wk` column and unit-tested. The dataset starts and ends exactly on quarter boundaries.
+- **Why:** Follow the data over the prose; the fiscal reading makes every holiday land where retail reality puts it.
+
 ## D20. Duplicate 'Region 2_' series (data quirk) — Status: Default
 - **Found:** 4 Channel 3 / Geo G2 series (V1–V4) appear twice — once under regular `G2_000x` SKUs (~9k–29k units each) and once under a tiny `Region 2_` bucket (4–18 units lifetime) with blank PPN.
 - **Options:** (a) merge into the main series; (b) keep as separate series, PPN derived from the variant number; (c) drop (loses 54 units).
@@ -124,8 +129,3 @@ Format: each decision lists the options considered, the choice, and why. Status 
 - **Anti-gaming rule (from adversarial review):** shipments that cannot arrive within the horizon are forbidden — without this, the solver parks ~89k units in transit near the horizon end purely to earn supply-WOS credit on stock that never lands.
 - **Key outcomes (baseline, post-review):** 846,991 u (94.5% of annual capacity, 3 quarters at cap), **0 u unmet**, freight $5.22M of which $4.68M is Air — expedite forced by capacity scarcity, since a just-in-time-produced unit cannot make an ocean lead even with Fast Boat available. Buffers are sacrificed (median supply WOS 1.0 vs target 12) to protect sell-through and channel stock (median 12.0 vs 13). 9/9 independent validators pass, incl. a full inventory-balance replay from shipments.
 - **Known sensitivity (deck):** the Air/Ocean split is a step function of the supply-WOS penalty (threshold ≈ $0.71/u-wk vs the chosen $2) — the freight headline is a policy choice, not a physical constant. Cumulative P90 can exceed contractual volumes (caps clip the P50 path); P90 is per-week uncertainty, not a feasible cumulative.
-
-## D19. Horizon & calendar interpretation — Status: Default
-- **Choice:** Actuals end **2023W39** (per the file, 104 filled weeks — the brief's "2023W26" text is stale). Horizon = **2023W40 → 2024W39** (52 weeks = 4 fiscal quarters of 13). Week labels are **fiscal** (FY starts ~calendar October; evidence: Black Friday = fiscal W09, XMAS = fiscal W13–14, pricing date 2021-07-20 ↔ fiscal 2021W43). CQ = fiscal quarter ending 2023W39, so the shortage window is **2023W40–2023W45**.
-- **Verified in Phase 1:** fiscal 2021 is a 53-week year with a **14-week Q1** (quarter boundaries W14/W27/W40/W53; all other years W13/W26/W39/W52) — proven against the seasonality sheet's `CY_Qtr_Wk` column and unit-tested. The dataset starts and ends exactly on quarter boundaries.
-- **Why:** Follow the data over the prose; the fiscal reading makes every holiday land where retail reality puts it.
