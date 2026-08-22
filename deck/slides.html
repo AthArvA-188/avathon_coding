@@ -373,30 +373,37 @@
 
 <!-- 14 ─ next-gen: LLM signals + agents -->
 <section class="slide">
-  <div class="kicker">Where this stack goes · 2 of 3</div>
-  <h2>LLM signals and agentic loops — mapped onto this exact codebase</h2>
+  <div class="kicker">Where this stack goes · 2 of 3 · PROTOTYPED — run --signals / --agents</div>
+  <h2>LLM signals and agentic loops — built, not sketched</h2>
   <div class="cols">
     <div>
-      <p style="margin-top:0"><b>LLM-augmented signals.</b> The V2+V4 scenario
-      arrived as prose; in production it arrives as a supplier email. An LLM
-      extracts structured events — <i>(variants, weeks, cap)</i> — into the
-      same scenario hook the optimizer already consumes. Auditability:
-      every extracted event keeps its source link, prompts are versioned,
-      planner overrides are logged, and an eval harness gates any change that
-      would touch forecast weights.</p>
+      <p style="margin-top:0"><b>LLM-augmented signals (working).</b> A fixture
+      inbox of supplier emails and analyst notes flows through a pluggable
+      extractor (Claude when a key is present; a deterministic stand-in
+      otherwise, so reviewers run offline) into typed events — supply caps,
+      demand shocks, freight disruptions. Every event carries its source,
+      quoted evidence, prompt version and confidence; <b>nothing touches a
+      plan until a human approves it</b>; an eval harness scores the extractor
+      against labeled fixtures (100% precision/recall) before it is trusted.
+      Approved events compile into the same hooks the V2+V4 scenario uses.
+      A red-team review then attacked the gates — prompt-injected demand
+      shocks, fabricated evidence, wiped approvals — and every confirmed hole
+      was closed: sanitize boundary, verbatim-evidence rule, a 15%
+      demand-delta guard that forces human sign-off, staged plan promotion.</p>
     </div>
     <div>
-      <p style="margin-top:0"><b>Agentic decomposition — already half-built:</b></p>
-      <ul style="margin-top:6px">
-        <li><b>Forecaster agent</b> = forecast.py (authority ends at the demand table)</li>
-        <li><b>Planner agent</b> = mps.py (proposes, never self-certifies)</li>
-        <li><b>Verifier agent</b> = validate.py — independent today, by design</li>
-        <li><b>Scenario agent</b> = scenario.py (re-plans under disruption)</li>
+      <p style="margin-top:0"><b>Agentic loop (working) — one real trace:</b></p>
+      <ul style="margin-top:6px;font-size:14.5px">
+        <li>SignalAgent: 7 events extracted → HumanGate approves</li>
+        <li>PlannerAgent proposes the fast greedy plan</li>
+        <li><b>VerifierAgent REJECTS</b>: 102,282 u unmet &gt; 5,017 u policy</li>
+        <li>PlannerAgent escalates to the MILP</li>
+        <li><b>VerifierAgent ACCEPTS</b>: 11 checks pass, 2 u unmet → published</li>
       </ul>
-      <p style="font-size:14px;color:var(--ink2)">Handoffs are typed tables in
-      SQLite; a verifier rejection bounces the plan back with the violated
-      constraint attached; humans own assumption changes (the D-decision log)
-      and disruption acceptance.</p>
+      <p style="font-size:14px;color:var(--ink2)">Every handoff is a row in an
+      audit table. The loop's first run caught a genuine integration bug —
+      the verifier rejected both plans until the replay used the same shocked
+      demand — which is exactly the failure class a verifier agent exists for.</p>
     </div>
   </div>
 </section>

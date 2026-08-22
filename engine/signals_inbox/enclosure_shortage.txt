@@ -1,0 +1,11 @@
+From: procurement@acme-components.example
+Subject: Enclosure supply constraint next quarter
+
+Team,
+
+Our supplier has flagged reduced material availability for the shared
+enclosure used by Variant V2 and Variant V4. Combined supply of the two
+variants will be capped at 4,500 units per week for the first six weeks of
+next quarter. Availability normalises afterwards.
+
+Please reflect this in the production plan.

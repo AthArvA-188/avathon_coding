@@ -84,6 +84,22 @@ def load_demand(conn: sqlite3.Connection):
     return pairs, d_direct, d_ch3
 
 
+def apply_demand_mults(pairs, d_dir, d_ch3, demand_mults) -> None:
+    """Apply signal-layer demand shocks to the cube IN PLACE. Shared by the
+    MILP, the heuristic and the balance-replay validator so all three see
+    the identical shocked demand."""
+    for variant, geo, ws, mult in (demand_mults or []):
+        for k in pairs:
+            if k[0] == variant and (geo is None or k[1] == geo):
+                for w in ws:
+                    d_dir[k][w] *= mult
+                    d_ch3[k][w] *= mult
+    if demand_mults:                     # refresh the seasonal extension
+        for cube in (d_dir, d_ch3):
+            for k in pairs:
+                cube[k][H:] = cube[k][H - 52:H - 52 + EXT]
+
+
 def freight_modes(conn: sqlite3.Connection) -> dict[str, list[tuple[str, int, float]]]:
     """Per geo: the cost-Pareto set of [(mode, lead, cost)], cheapest first.
     A mode is kept only if it is strictly faster than every cheaper mode, so
@@ -150,11 +166,19 @@ def opening_state(pairs, d_tot, d_ch3, modes, launched):
 
 def solve(conn: sqlite3.Connection, plan_id: str,
           extra_prod_caps: list[tuple[tuple[str, ...], range, float]] | None = None,
-          time_limit: int = 600) -> dict:
+          time_limit: int = 600,
+          demand_mults: list[tuple[str, str | None, range, float]] | None = None,
+          mode_blocks: list[tuple[str, str, range]] | None = None) -> dict:
     """Build and solve the MILP; returns solution tables as lists of rows.
     extra_prod_caps: [(variants, weeks, combined weekly cap)] — each listed
-    week gets its own combined-production constraint (scenario hook)."""
+    week gets its own combined-production constraint (scenario hook).
+    demand_mults: [(variant, geo|None, weeks, multiplier)] — demand shocks
+    from the signals layer, applied to the P50 cube before solving.
+    mode_blocks: [(geo, mode, weeks)] — freight disruptions: the mode is
+    unavailable for shipping in those weeks."""
     pairs, d_dir, d_ch3 = load_demand(conn)
+    apply_demand_mults(pairs, d_dir, d_ch3, demand_mults)
+    blocked = {(g, m, w) for g, m, ws in (mode_blocks or []) for w in ws}
     d_tot = {k: d_dir[k] + d_ch3[k] for k in pairs}
     variants = sorted({v for v, g in pairs},
                       key=lambda v: int(v.split("V")[-1]))
@@ -173,7 +197,8 @@ def solve(conn: sqlite3.Connection, plan_id: str,
     # to earn supply-position WOS credit for units that never land
     ship = {(v, g, w, m): pulp.LpVariable(
                 f"ship_{v}_{g}_{w}_{m}", lowBound=0,
-                upBound=(0 if w + lead > H - 1 else None))
+                upBound=(0 if (w + lead > H - 1 or (g, m, w) in blocked)
+                         else None))
             for (v, g) in pairs for w in weeks for m, lead, _ in modes[g]}
     oh = pulp.LpVariable.dicts("oh", (pairs, weeks), lowBound=0)
     it = pulp.LpVariable.dicts("it", (pairs, weeks), lowBound=0)
@@ -295,31 +320,52 @@ def solve(conn: sqlite3.Connection, plan_id: str,
             "total_production": sum(r[3] for r in mps_rows)}
 
 
+def persist_plan(conn: sqlite3.Connection, plan_id: str, sol: dict) -> None:
+    """Plan-scoped write of a solution dict — other stored plans survive."""
+    conn.execute("BEGIN IMMEDIATE")
+    try:
+        db.init_mps_schema(conn)              # CREATE IF NOT EXISTS only
+        for t in ("mps", "shipments", "inventory", "validation"):
+            conn.execute(f"DELETE FROM {t} WHERE plan_id = ?", (plan_id,))
+        conn.executemany("INSERT INTO mps VALUES (?,?,?,?,?)", sol["mps"])
+        conn.executemany("INSERT INTO shipments VALUES (?,?,?,?,?,?,?)",
+                         sol["shipments"])
+        conn.executemany(
+            "INSERT INTO inventory VALUES (?,?,?,?,?,?,?,?,?,?,?)",
+            sol["inventory"])
+        conn.execute("COMMIT")
+    except BaseException:
+        conn.execute("ROLLBACK")
+        raise
+
+
+def drop_plan(conn: sqlite3.Connection, plan_id: str) -> None:
+    """Remove a rejected candidate plan entirely."""
+    conn.execute("BEGIN IMMEDIATE")
+    try:
+        for t in ("mps", "shipments", "inventory", "validation"):
+            conn.execute(f"DELETE FROM {t} WHERE plan_id = ?", (plan_id,))
+        conn.execute("COMMIT")
+    except BaseException:
+        conn.execute("ROLLBACK")
+        raise
+
+
 def run(db_path: str | Path, plan_id: str = "baseline",
-        extra_prod_caps=None, time_limit: int = 600) -> dict:
+        extra_prod_caps=None, time_limit: int = 600,
+        demand_mults=None, mode_blocks=None) -> dict:
     """Solve, persist (plan-scoped — other stored plans survive), validate."""
     from . import validate
     conn = db.connect(db_path)
     try:
         sol = solve(conn, plan_id, extra_prod_caps=extra_prod_caps,
-                    time_limit=time_limit)
-        conn.execute("BEGIN IMMEDIATE")
-        try:
-            db.init_mps_schema(conn)          # CREATE IF NOT EXISTS only
-            for t in ("mps", "shipments", "inventory", "validation"):
-                conn.execute(f"DELETE FROM {t} WHERE plan_id = ?", (plan_id,))
-            conn.executemany("INSERT INTO mps VALUES (?,?,?,?,?)", sol["mps"])
-            conn.executemany("INSERT INTO shipments VALUES (?,?,?,?,?,?,?)",
-                             sol["shipments"])
-            conn.executemany(
-                "INSERT INTO inventory VALUES (?,?,?,?,?,?,?,?,?,?,?)",
-                sol["inventory"])
-            conn.execute("COMMIT")
-        except BaseException:
-            conn.execute("ROLLBACK")
-            raise
+                    time_limit=time_limit, demand_mults=demand_mults,
+                    mode_blocks=mode_blocks)
+        persist_plan(conn, plan_id, sol)
         checks = validate.run_checks(conn, plan_id,
-                                     extra_prod_caps=extra_prod_caps)
+                                     extra_prod_caps=extra_prod_caps,
+                                     mode_blocks=mode_blocks,
+                                     demand_mults=demand_mults)
         failed = [c for c in checks if c[2] == "FAIL"]
         if failed:
             raise RuntimeError(f"constraint validation failed: {failed}")

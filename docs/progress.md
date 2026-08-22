@@ -79,6 +79,9 @@ Running log. Newest phase status at top of each section; check items off as they
 
 ## Post-phase additions (2026-08-21)
 
+- [x] **§3.4 prototypes red-teamed and hardened** (review round 3): 6 confirmed HIGH findings fixed — default-open human gate, prompt-injection path through a verifier that replayed the poisoned cube (now: sanitize boundary + verbatim-evidence rule + 15% demand-delta guard), mislabeled fallback provenance, batch-crashing params, approvals wiped by re-extraction (now content-hash keyed), published-plan destruction on failed re-runs (now staged promotion). CLI: `--approve-signals` / `--reject-signals` / `--auto-approve`. 66 tests green; closed-gate → human-approve → accepted flow demonstrated live.
+- [x] **§3.4 prototypes built** (D27, D28): LLM-augmented signals (`llm.py`+`signals.py`+fixture inbox: pluggable Claude/rules extractor, provenance, human gate, eval harness at 100%/100%) and the agentic planning loop (`agents.py`: greedy-first proposal, verifier rejection on service policy — observed live: greedy REJECTED at 102,282 u unmet vs 5,017 policy, MILP ACCEPTED at 2 u — full `agent_log` audit trail). New solver hooks: `demand_mults`, `mode_blocks`; the loop's first run caught a real validator/shock integration bug. 62 tests green.
+
 - [x] **Second planning method** (`planz/heuristic.py`, D26): transparent greedy plan through the same validators; head-to-head vs MILP via `--heuristic` — greedy $4.62M freight / 99,455 u unmet vs MILP $5.22M / 0 u. 54 tests green.
 - [x] `docs/talking-points.md`: the ten big decisions as rehearsable problem→options→choice→evidence→pushback stories
 - [x] decisions.md restored to numeric order; deck slide 8 updated with the two-method comparison

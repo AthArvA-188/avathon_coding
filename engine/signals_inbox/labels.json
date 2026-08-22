@@ -1,0 +1,32 @@
+{
+  "enclosure_shortage.txt": [
+    {"event_type": "supply_cap",
+     "params": {"variants": ["Variant V2", "Variant V4"], "start_offset": 0,
+                "n_weeks": 6, "weekly_cap": 4500.0}}
+  ],
+  "retailer_upside.txt": [
+    {"event_type": "demand_shock",
+     "params": {"variant": "Variant V3", "geo": "Geo G1", "start_offset": 0,
+                "n_weeks": 13, "multiplier": 2.0}}
+  ],
+  "freight_advisory.txt": [
+    {"event_type": "freight_disruption",
+     "params": {"geo": "Geo G1", "mode": "Fast Boat Ocean",
+                "start_offset": 4, "n_weeks": 4}}
+  ],
+  "analyst_note.txt": [],
+  "promo_update.txt": [
+    {"event_type": "demand_shock",
+     "params": {"variant": "Variant V1", "geo": "Geo G2", "start_offset": 14,
+                "n_weeks": 2, "multiplier": 1.2}},
+    {"event_type": "demand_shock",
+     "params": {"variant": "Variant V2", "geo": "Geo G2", "start_offset": 14,
+                "n_weeks": 2, "multiplier": 1.2}},
+    {"event_type": "demand_shock",
+     "params": {"variant": "Variant V3", "geo": "Geo G2", "start_offset": 14,
+                "n_weeks": 2, "multiplier": 1.2}},
+    {"event_type": "demand_shock",
+     "params": {"variant": "Variant V4", "geo": "Geo G2", "start_offset": 14,
+                "n_weeks": 2, "multiplier": 1.2}}
+  ]
+}

@@ -1,0 +1,6 @@
+From: logistics@programz.example
+Subject: Carrier advisory - Fast Boat
+
+Carrier notice: Fast Boat Ocean service to Geo G1 will be suspended for four
+weeks starting 2023W44 due to scheduled vessel maintenance. Standard Ocean
+and Air capacity are unaffected.

@@ -199,6 +199,39 @@ def connect(path: str | Path) -> sqlite3.Connection:
     return conn
 
 
+# Owned by the signals/agents stages (next-gen prototypes). Signals are
+# extracted from unstructured text and are NEVER applied to a plan until a
+# human (or an explicitly-invoked auto-approval) flips status to 'approved'.
+SIGNALS_SCHEMA = """
+CREATE TABLE IF NOT EXISTS signals (
+    id             INTEGER PRIMARY KEY,
+    source         TEXT NOT NULL,        -- inbox filename
+    event_type     TEXT NOT NULL CHECK (event_type IN
+                       ('supply_cap', 'demand_shock', 'freight_disruption')),
+    params_json    TEXT NOT NULL,        -- typed event payload
+    evidence       TEXT NOT NULL,        -- quoted span from the source
+    backend        TEXT NOT NULL,        -- 'rules-v1' or the LLM model id
+    prompt_version TEXT NOT NULL,
+    confidence     REAL NOT NULL,
+    status         TEXT NOT NULL CHECK (status IN
+                       ('pending', 'approved', 'rejected')),
+    created_at     TEXT NOT NULL,
+    content_hash   TEXT NOT NULL         -- re-extraction upserts on this key
+);
+
+CREATE UNIQUE INDEX IF NOT EXISTS idx_signals_hash ON signals(content_hash);
+
+CREATE TABLE IF NOT EXISTS agent_log (
+    id         INTEGER PRIMARY KEY,
+    ts         TEXT NOT NULL,
+    agent      TEXT NOT NULL,
+    action     TEXT NOT NULL,
+    detail     TEXT NOT NULL,
+    outcome    TEXT NOT NULL
+);
+"""
+
+
 def _run_script(conn: sqlite3.Connection, script: str) -> None:
     # NOTE: naive split — schema comments must never contain ';'.
     for stmt in script.split(";"):
@@ -212,6 +245,17 @@ def init_forecast_schema(conn: sqlite3.Connection) -> None:
 
 def init_mps_schema(conn: sqlite3.Connection) -> None:
     _run_script(conn, MPS_SCHEMA)
+
+
+def init_signals_schema(conn: sqlite3.Connection) -> None:
+    # legacy migration: early signals tables lacked content_hash
+    have = conn.execute("SELECT name FROM sqlite_master WHERE name='signals'"
+                        ).fetchone()
+    if have:
+        cols = {r[1] for r in conn.execute("PRAGMA table_info(signals)")}
+        if "content_hash" not in cols:
+            conn.execute("DROP TABLE signals")
+    _run_script(conn, SIGNALS_SCHEMA)
 
 
 def init_ingest_schema(conn: sqlite3.Connection) -> None:

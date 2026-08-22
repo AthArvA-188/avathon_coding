@@ -28,12 +28,29 @@ def main(argv: list[str] | None = None) -> int:
     ap.add_argument("--scenario", action="store_true", help="(phase 4)")
     ap.add_argument("--heuristic", action="store_true",
                     help="second method: greedy plan + comparison vs MILP")
+    ap.add_argument("--signals", action="store_true",
+                    help="extract planning events from the unstructured inbox"
+                         " and score the extractor vs labeled fixtures")
+    ap.add_argument("--agents", action="store_true",
+                    help="run the agentic planning loop (signals -> approval"
+                         " -> greedy-first proposal -> verifier -> escalate)")
+    ap.add_argument("--auto-approve", action="store_true",
+                    help="explicitly allow the loop to auto-approve extracted"
+                         " events above the confidence floor (demo mode)")
+    ap.add_argument("--approve-signals", action="store_true",
+                    help="HUMAN GATE: approve pending events >= 0.8 confidence")
+    ap.add_argument("--reject-signals", action="store_true",
+                    help="HUMAN GATE: reject all pending events (survives"
+                         " re-extraction)")
     ap.add_argument("--all", action="store_true", help="run every stage")
     args = ap.parse_args(argv)
 
     stages = {k: (getattr(args, k) or args.all)
               for k in ("ingest", "forecast", "mps", "scenario", "heuristic")}
-    if not any(stages.values()):
+    stages["signals"] = args.signals            # explicit-only prototypes
+    stages["agents"] = args.agents
+    if not (any(stages.values()) or args.approve_signals
+            or args.reject_signals):
         ap.error("pick at least one stage (e.g. --ingest or --all)")
 
     if stages["ingest"]:
@@ -94,6 +111,35 @@ def main(argv: list[str] | None = None) -> int:
                   f" {short:>8,.0f}"
                   f" {format(ws, '.1f') if ws is not None else '-':>10}"
                   f" {format(wc, '.1f') if wc is not None else '-':>9}")
+
+    if stages["signals"]:
+        from planz import signals
+        found = signals.extract_inbox(args.db)
+        print(f"[signals] {len(found)} events extracted (pending approval)")
+        for e in found:
+            print(f"  {e['source']:<26} {e['event_type']:<19}"
+                  f" conf {e['confidence']:.2f}  {e['params']}")
+        ev = signals.evaluate()
+        print(f"  eval vs labeled fixtures [{ev['backend']}]:"
+              f" precision {ev['precision']:.0%}, recall {ev['recall']:.0%}")
+
+    if args.approve_signals:
+        from planz import signals
+        print(f"[signals] {signals.approve(args.db)} events approved (human)")
+
+    if args.reject_signals:
+        from planz import signals
+        print(f"[signals] {signals.reject_pending(args.db)} events rejected"
+              " (human; survives re-extraction)")
+
+    if stages["agents"]:
+        from planz import agents
+        t0 = time.perf_counter()
+        out = agents.run_loop(args.db, auto_approve=args.auto_approve)
+        dt = time.perf_counter() - t0
+        print(f"[agents] loop finished in {dt:.0f}s -> {out['status']}")
+        for line in out["trace"]:
+            print("  " + line)
     return 0
 
 

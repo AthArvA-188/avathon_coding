@@ -26,8 +26,10 @@ QUARTER_START = {0, 13, 26, 39}
 
 
 def solve(conn: sqlite3.Connection, plan_id: str = "heuristic",
-          extra_prod_caps=None) -> dict:
+          extra_prod_caps=None, demand_mults=None, mode_blocks=None) -> dict:
     pairs, d_dir, d_ch3 = mps.load_demand(conn)
+    mps.apply_demand_mults(pairs, d_dir, d_ch3, demand_mults)
+    blocked = {(g, m, w) for g, m, ws in (mode_blocks or []) for w in ws}
     d_tot = {k: d_dir[k] + d_ch3[k] for k in pairs}
     variants = sorted({v for v, g in pairs},
                       key=lambda v: int(v.split("V")[-1]))
@@ -85,7 +87,10 @@ def solve(conn: sqlite3.Connection, plan_id: str = "heuristic",
             s_total = 0.0
             for g in [g for (vv, g) in pairs if vv == v]:
                 k = (v, g)
-                fastest = min(lead for _, lead, _ in modes[g])
+                avail = [m for m in modes[g] if (g, m[0], w) not in blocked]
+                if not avail:
+                    continue                   # every mode blocked this week
+                fastest = min(lead for _, lead, _ in avail)
                 if w + fastest > H - 1:
                     continue                   # nothing can arrive in time
                 tgt = wos.target_stock(d_tot[k][w + 1:],
@@ -131,7 +136,10 @@ def solve(conn: sqlite3.Connection, plan_id: str = "heuristic",
                 if qty <= 0:
                     continue
                 runout = wos.run_out_wos(oh[k] + it[k], d_tot[k][w + 1:])
-                usable = [m for m in modes[g] if w + m[1] <= H - 1]
+                usable = [m for m in modes[g] if w + m[1] <= H - 1
+                          and (g, m[0], w) not in blocked]
+                if not usable:
+                    continue
                 fitting = [m for m in usable if m[1] <= max(1.0, runout)]
                 mode = (min(fitting, key=lambda m: m[2]) if fitting
                         else min(usable, key=lambda m: m[1]))
@@ -158,28 +166,17 @@ def solve(conn: sqlite3.Connection, plan_id: str = "heuristic",
 
 
 def run(db_path: str | Path, plan_id: str = "heuristic",
-        extra_prod_caps=None) -> dict:
+        extra_prod_caps=None, demand_mults=None, mode_blocks=None) -> dict:
     from . import validate
     conn = db.connect(db_path)
     try:
-        sol = solve(conn, plan_id, extra_prod_caps=extra_prod_caps)
-        conn.execute("BEGIN IMMEDIATE")
-        try:
-            db.init_mps_schema(conn)
-            for t in ("mps", "shipments", "inventory", "validation"):
-                conn.execute(f"DELETE FROM {t} WHERE plan_id = ?", (plan_id,))
-            conn.executemany("INSERT INTO mps VALUES (?,?,?,?,?)", sol["mps"])
-            conn.executemany("INSERT INTO shipments VALUES (?,?,?,?,?,?,?)",
-                             sol["shipments"])
-            conn.executemany(
-                "INSERT INTO inventory VALUES (?,?,?,?,?,?,?,?,?,?,?)",
-                sol["inventory"])
-            conn.execute("COMMIT")
-        except BaseException:
-            conn.execute("ROLLBACK")
-            raise
+        sol = solve(conn, plan_id, extra_prod_caps=extra_prod_caps,
+                    demand_mults=demand_mults, mode_blocks=mode_blocks)
+        mps.persist_plan(conn, plan_id, sol)
         checks = validate.run_checks(conn, plan_id,
-                                     extra_prod_caps=extra_prod_caps)
+                                     extra_prod_caps=extra_prod_caps,
+                                     mode_blocks=mode_blocks,
+                                     demand_mults=demand_mults)
         failed = [c for c in checks if c[2] == "FAIL"]
         if failed:
             raise RuntimeError(f"heuristic plan failed validation: {failed}")

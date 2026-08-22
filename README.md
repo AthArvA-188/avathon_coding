@@ -31,6 +31,8 @@ conda create -n avathon python=3.12 -y && conda activate avathon
 pip install -r engine/requirements.txt
 
 python engine/run_pipeline.py --all        # or --ingest --forecast --mps --scenario
+python engine/run_pipeline.py --signals    # §3.4: extract events from the inbox + eval
+python engine/run_pipeline.py --agents     # §3.4: run the agentic planning loop
 
 cd engine && python -m pytest tests -q     # 54 tests, ~25 s
 python engine/verify.py                    # 14 independent spot checks
@@ -51,6 +53,8 @@ cd ../app && npm install && npm run dev    # UI on http://localhost:3000
 | `engine/planz/heuristic.py` | The second planning method: a transparent greedy plan, same validators — run `--heuristic` for the head-to-head vs the MILP |
 | `engine/planz/validate.py` | 9 independent post-solve constraint checks — the pipeline fails on any violation |
 | `engine/planz/scenario.py` | V2+V4 shared-cap re-solve + baseline diff |
+| `engine/planz/llm.py` + `signals.py` | **§3.4 prototype:** unstructured inbox → typed events with provenance, human approval gate, eval harness (Claude backend if `ANTHROPIC_API_KEY` is set, offline rules backend otherwise) — run `--signals` |
+| `engine/planz/agents.py` | **§3.4 prototype:** agentic loop — signal extraction → approval → greedy-first proposal → verifier (constraints + service policy) → escalate to MILP → publish or `needs_human`, fully logged in `agent_log` — run `--agents` |
 | `engine/verify.py` | Human-friendly auditor: 14 checks sharing no code with the pipeline |
 | `engine/tests/` | 51 pytest tests (calendar ground truth, xlsx reconciliation, score bands, MILP smoke solve, validator mutations) |
 | `app/` | Next.js UI: forecast explorer, MPS & pack-out view, scenario toggle |

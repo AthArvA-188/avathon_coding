@@ -18,7 +18,8 @@ TOL = 0.5          # units; CBC solutions are continuous, tolerance is generous
 
 
 def run_checks(conn: sqlite3.Connection, plan_id: str,
-               extra_prod_caps=None) -> list[tuple]:
+               extra_prod_caps=None, mode_blocks=None,
+               demand_mults=None) -> list[tuple]:
     checks: list[tuple] = []
 
     def add(name: str, ok: bool, detail: str):
@@ -80,6 +81,8 @@ def run_checks(conn: sqlite3.Connection, plan_id: str,
 
     # volume caps: cumulative production per capped variant (D23)
     pairs, d_dir, d_ch3 = mps.load_demand(conn)
+    # the plan was solved against the shocked cube — replay against the same
+    mps.apply_demand_mults(pairs, d_dir, d_ch3, demand_mults)
     d_tot = {k: d_dir[k] + d_ch3[k] for k in pairs}
     caps = mps.production_caps(conn, d_tot)
     breaches = []
@@ -143,6 +146,17 @@ def run_checks(conn: sqlite3.Connection, plan_id: str,
         f"max |persisted - replayed| inventory: {worst_bal:.3f}")
     add("shorts_within_demand", bad_short == 0,
         f"{bad_short} short cells exceed forecast demand")
+
+    # freight disruptions: no shipment may use a blocked (geo, mode, week)
+    for bi, (g, m, ws) in enumerate(mode_blocks or []):
+        labels = [mps.week_label(w) for w in ws]
+        ph = ",".join("?" for _ in labels)
+        n_bad = conn.execute(
+            f"SELECT COUNT(*) FROM shipments WHERE plan_id = ? AND geo = ?"
+            f" AND mode = ? AND week_label IN ({ph})",
+            (plan_id, g, m, *labels)).fetchone()[0]
+        add(f"mode_block_{bi}", n_bad == 0,
+            f"{n_bad} shipments on blocked {m}/{g}")
 
     # scenario extra caps (combined production per listed week)
     for ci, (vs, ws, cap) in enumerate(extra_prod_caps or []):
