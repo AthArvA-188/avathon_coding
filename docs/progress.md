@@ -12,7 +12,7 @@ Running log. Newest phase status at top of each section; check items off as they
 | 3 | MPS: MILP, pack-out, freight, WOS, constraint validators | ✅ Done (2026-08-21) |
 | 4 | Scenario: V2+V4 shared cap, allocation, diff computation | ✅ Done (2026-08-21) |
 | 5 | UI: forecast explorer, MPS view, scenario toggle + diff | ✅ Done (2026-08-21) |
-| 6 | Packaging: deck (HTML), README, start scripts, cover note | ⬜ Not started |
+| 6 | Packaging: deck (HTML), README, start scripts, cover note | ✅ Done (2026-08-21) |
 
 ## Phase 0 — Planning ✅ (2026-08-21)
 
@@ -68,11 +68,14 @@ Running log. Newest phase status at top of each section; check items off as they
 - [x] Scenario view: instant toggle (both plans pre-solved), delta stats, allocation table, V2+V4 production + supply-position recovery charts, stockouts & per-geo WOS impact
 - [x] Verified: production build clean; all 4 APIs + 4 pages smoke-tested live (200s, correct shapes)
 
-## Phase 6 — Packaging
+## Phase 6 — Packaging ✅ (2026-08-21)
 
-- [ ] `start.ps1` / `start.sh`; README (prereqs, setup, ingest, launch, code map, limitations)
-- [ ] HTML slide deck (~12–16 slides) incl. §3.4 next-gen threads
-- [ ] Final pass: commit history, cover note draft
+- [x] `start.ps1` / `start.sh`: conda env → deps → full pipeline → UI, one command
+- [x] README rewritten: prereqs, quick start, code map, headline results, known limitations
+- [x] `deck/slides.html`: 16 slides — framing, punchline (demand > capacity), data foundation, forecast approach+quality, lifecycle/caps, MPS formulation+results, freight story, scenario setup+impact+recommendation, all four §3.4 next-gen threads, assumptions — keyboard nav + print-to-PDF, charts from the same numbers as planz.db
+- [x] `COVER_NOTE.md` (≤300 words): time split, next-week list, look-first pointers
+- [x] Independent fact-check agent run over every deck number vs the live DB
+- [x] Verification companions shipped earlier this phase group: `engine/verify.py` + published Verifier's Guide artifact
 
 ## Notes / blockers
 

@@ -1,0 +1,539 @@
+<title>Program Z — FY2024 Demand & Supply Plan</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;600;700&family=IBM+Plex+Mono:wght@400;500&display=swap">
+<style>
+  /* Single-theme (light) on purpose: this is a print-ready deck. */
+  :root {
+    --bg: #F6F6F3; --card: #FFFFFF; --ink: #22261F; --ink2: #6B7166;
+    --line: #E3E4DE; --blue: #2a78d6; --orange: #eb6834; --aqua: #1baf7a;
+    --warn: #B45309; --band: rgba(235,104,52,.14);
+  }
+  * { box-sizing: border-box; }
+  html { scroll-snap-type: y mandatory; }
+  body { margin: 0; background: var(--bg); color: var(--ink);
+    font: 17px/1.55 "IBM Plex Sans", "Segoe UI", system-ui, sans-serif; }
+  .slide { min-height: 100vh; scroll-snap-align: start; display: flex;
+    flex-direction: column; justify-content: center; padding: 48px 8vw; }
+  .slide + .slide { border-top: 1px solid var(--line); }
+  .kicker { font: 500 12px/1 "IBM Plex Mono", monospace; letter-spacing: .16em;
+    text-transform: uppercase; color: var(--ink2); margin-bottom: 14px; }
+  h1 { font-size: clamp(34px, 4.6vw, 56px); line-height: 1.08; margin: 0 0 14px;
+    letter-spacing: -0.02em; font-weight: 700; text-wrap: balance; max-width: 22ch; }
+  h2 { font-size: clamp(26px, 3.2vw, 38px); line-height: 1.12; margin: 0 0 18px;
+    letter-spacing: -0.015em; font-weight: 700; text-wrap: balance; max-width: 28ch; }
+  p, li { max-width: 74ch; }
+  .sub { color: var(--ink2); font-size: 19px; max-width: 62ch; }
+  ul { margin: 10px 0 0; padding-left: 22px; }
+  li { margin-bottom: 10px; }
+  li b { font-weight: 600; }
+  .cols { display: grid; gap: 28px; grid-template-columns: 1fr 1fr; align-items: start; }
+  @media (max-width: 860px) { .cols { grid-template-columns: 1fr; } }
+  .stat-row { display: flex; flex-wrap: wrap; gap: 14px; margin: 22px 0 8px; }
+  .stat { background: var(--card); border: 1px solid var(--line); border-radius: 12px;
+    padding: 16px 20px; min-width: 190px; }
+  .stat .v { font-size: 30px; font-weight: 700; letter-spacing: -0.01em;
+    font-variant-numeric: tabular-nums; }
+  .stat .v.warn { color: var(--warn); }
+  .stat .l { font-size: 12.5px; color: var(--ink2); margin-top: 3px; line-height: 1.45; }
+  table { border-collapse: collapse; font-size: 14.5px; margin-top: 10px; }
+  th, td { text-align: left; padding: 7px 16px 7px 0; border-bottom: 1px solid var(--line); }
+  th { font: 500 11px "IBM Plex Mono", monospace; letter-spacing: .1em;
+    text-transform: uppercase; color: var(--ink2); }
+  td.n, th.n { text-align: right; font-variant-numeric: tabular-nums; }
+  .good { color: #1E7A3C; font-weight: 600; }
+  .chart-card { background: var(--card); border: 1px solid var(--line);
+    border-radius: 12px; padding: 18px; margin-top: 18px; overflow-x: auto; }
+  svg text { font: 400 10.5px "IBM Plex Mono", monospace; fill: var(--ink2); }
+  .legend { display: flex; gap: 18px; font-size: 13px; color: var(--ink2); margin-bottom: 8px; }
+  .legend span { display: inline-flex; gap: 7px; align-items: center; }
+  .sw { width: 14px; height: 3px; border-radius: 2px; display: inline-block; }
+  .foot { font: 400 12px "IBM Plex Mono", monospace; color: var(--ink2); margin-top: 34px; }
+  .pill { display: inline-block; background: var(--band); border-radius: 999px;
+    padding: 3px 12px; font: 500 12.5px "IBM Plex Mono", monospace; color: var(--ink); }
+  #pageno { position: fixed; right: 18px; bottom: 14px;
+    font: 500 12px "IBM Plex Mono", monospace; color: var(--ink2); }
+  .quote { border-left: 3px solid var(--orange); padding-left: 16px;
+    font-size: 19px; max-width: 60ch; }
+  @media print {
+    html { scroll-snap-type: none; }
+    .slide { min-height: 0; page-break-after: always; padding: 40px; }
+    #pageno { display: none; }
+  }
+</style>
+
+<!-- 1 ─ title -->
+<section class="slide">
+  <div class="kicker">Demand planning take-home · submission</div>
+  <h1>Program Z: the FY2024 demand &amp; supply plan</h1>
+  <p class="sub">A 52-week forecast, a capacity-feasible master production
+  schedule, and a component-shortage stress test — delivered as a runnable
+  system, not a spreadsheet.</p>
+  <p class="foot">deck: ← / → to navigate · Ctrl+P for PDF ·
+  repo: github.com/AthArvA-188/avathon_coding · app: start.sh → localhost:3000</p>
+</section>
+
+<!-- 2 ─ the ask -->
+<section class="slide">
+  <div class="kicker">The brief</div>
+  <h2>Three questions, one runnable system</h2>
+  <ul>
+    <li><b>1. Demand:</b> what do the next 4 quarters look like, per SKU × geo ×
+    channel × week?</li>
+    <li><b>2. Supply:</b> what MPS and weekly pack-out plan supports that demand
+    inside the real constraints — 17,280 u/week, 224,000 u/quarter, only 4
+    variants packed out per week, WOS targets of 12 (supply) and 13 (channel)?</li>
+    <li><b>3. Disruption:</b> what changes when V2 and V4's shared enclosure is
+    capped at 4,500 u/week for the first six weeks of next quarter?</li>
+  </ul>
+  <p class="sub" style="margin-top:18px">Everything below can be reproduced with
+  one command from the raw xlsx, and every headline number is re-checked by an
+  independent audit script and 51 automated tests.</p>
+</section>
+
+<!-- 3 ─ punchline -->
+<section class="slide">
+  <div class="kicker">If you remember one slide</div>
+  <h2>FY2024 demand exceeds the factory's entire annual capacity</h2>
+  <div class="stat-row">
+    <div class="stat"><div class="v">952,865 u</div><div class="l">forecast demand (P50), incl. two committed exclusive launches</div></div>
+    <div class="stat"><div class="v">896,000 u</div><div class="l">annual capacity (4 × 224,000)</div></div>
+    <div class="stat"><div class="v warn">2.0×</div><div class="l">holiday-quarter demand vs the quarterly cap</div></div>
+  </div>
+  <ul>
+    <li>The optimal plan runs <b>three of four quarters at exactly the cap</b>,
+    pre-builds ahead of the holidays, and still spends <b>$4.68M on air freight</b>
+    — expedite is the only lever left once capacity runs out.</li>
+    <li>The system is <b>fragile to shocks</b>: a 6-week component shortage
+    leaves the V2+V4 supply position depressed for ~8 months, because there is
+    no spare capacity to catch up.</li>
+    <li><b>The conversation to have with this client is capacity</b> (or demand
+    shaping) — the plan quantifies exactly what the shortage costs.</li>
+  </ul>
+</section>
+
+<!-- 4 ─ data foundation -->
+<section class="slide">
+  <div class="kicker">Data foundation</div>
+  <h2>The calendar was the first model to get right</h2>
+  <div class="cols">
+    <div>
+      <ul>
+        <li>Week labels are <b>fiscal</b> (year starts ~October): Black Friday
+        sits at fiscal W09, XMAS at W13. Fiscal 2021 has <b>53 weeks with a
+        14-week Q1</b> — proven against the promo calendar inside the workbook
+        and unit-tested.</li>
+        <li>Actuals actually run to <b>2023W39</b> (the brief's text says W26);
+        the horizon 2023W40→2024W39 is exactly four 13-week quarters.</li>
+        <li>Ingest is atomic and idempotent; every total reconciles to Excel at
+        full series grain.</li>
+      </ul>
+    </div>
+    <div>
+      <table>
+        <tr><th>Quirk found</th><th>Handled by</th></tr>
+        <tr><td>168 placeholder $0 prices (R2)</td><td>dropped, peer-filled</td></tr>
+        <tr><td>duplicated extract date (2022-02-28)</td><td>day-mean first</td></tr>
+        <tr><td>retailer carry windows (R3 delists)</td><td>span-bounded fill</td></tr>
+        <tr><td>4 ghost "Region 2_" series</td><td>kept, keyed, documented</td></tr>
+        <tr><td>contradictory FY24 promo rows</td><td>flagged, client question</td></tr>
+      </table>
+    </div>
+  </div>
+</section>
+
+<!-- 5 ─ forecast approach -->
+<section class="slide">
+  <div class="kicker">Forecast · approach</div>
+  <h2>One global model, honest baselines, explicit holidays</h2>
+  <ul>
+    <li><b>Model:</b> XGBoost quantile regression (P10/P50/P90) — one global
+    model across all 124 series, recursing week-by-week over the 52-week
+    horizon. Holiday weeks are explicit features, not left to be inferred.</li>
+    <li><b>Trained on log(units)</b> — series scales span four orders of
+    magnitude, and quantiles survive the transform exactly — with rows weighted
+    by volume so the loss cares about business-relevant weeks.</li>
+    <li><b>What we tried and dropped</b> (all scored on the same 13 hidden
+    weeks): raw-scale target 53% WAPE → log 41% (but −30% bias) → mean-model
+    recursion diverged → <b>volume weights: 37.6% WAPE, +3.3% bias — kept</b>.</li>
+    <li><b>Known-ahead prices:</b> the pricing file extends into the horizon;
+    future promo prices are legitimate features.</li>
+  </ul>
+</section>
+
+<!-- 6 ─ forecast quality -->
+<section class="slide">
+  <div class="kicker">Forecast · quality</div>
+  <h2>Beats the honest baseline by 13 points, nearly unbiased</h2>
+  <div class="cols">
+    <div>
+      <table>
+        <tr><th>Model (13-wk holdout)</th><th class="n">WAPE</th><th class="n">Bias</th></tr>
+        <tr><td><b>XGBoost P50</b></td><td class="n good">37.6%</td><td class="n good">+3.3%</td></tr>
+        <tr><td>Seasonal-naive (same week last year)</td><td class="n">50.7%</td><td class="n">+8.3%</td></tr>
+        <tr><td>Naive (last value)</td><td class="n">89.1%</td><td class="n">+67.5%</td></tr>
+      </table>
+      <p style="font-size:14px;color:var(--ink2);margin-top:14px">Wins on every
+      core variant (V1–V4) and V8. Honest weak spots: lumpy single-retailer
+      deals (V5/V6/V9) — weekly order patterns, not smooth demand — and
+      micro-volume Geo G3. Both are small and volume-capped.</p>
+    </div>
+    <div class="chart-card">
+      <div class="legend">
+        <span><span class="sw" style="background:var(--blue)"></span>Actuals</span>
+        <span><span class="sw" style="background:var(--orange)"></span>Forecast P50</span>
+        <span><span class="sw" style="background:var(--band);height:10px"></span>P10–P90</span>
+      </div>
+      <svg id="c-demand" width="520" height="240"></svg>
+    </div>
+  </div>
+</section>
+
+<!-- 7 ─ lifecycle -->
+<section class="slide">
+  <div class="kicker">Forecast · lifecycle</div>
+  <h2>Launches, sell-outs and volume caps are first-class</h2>
+  <ul>
+    <li><b>V10 &amp; V11 launch inside the horizon with zero history.</b> They
+    ramp on the launch curves of the earlier exclusives (V8/V9), deseasonalized
+    and re-shaped to FY2024's holiday calendar, scaled to exactly their
+    committed volumes: 57,407 and 23,689 units.</li>
+    <li><b>One-time deals exhaust on schedule:</b> V5 sells out 2023W51, V7 by
+    2024W10, V6 by 2024W21 — cumulative forecast never exceeds remaining
+    volume, enforced and tested.</li>
+    <li><b>Interpretation call (flagged to client):</b> the stated "lifetime
+    volumes" for exclusives cannot be lifetime — V8 has already sold 2.4× its
+    number — so they are read as <i>forward</i> volumes from the last actual
+    week. One-time-deal numbers do behave as lifetime totals.</li>
+    <li>V12 (sold out 2022W14) forecasts zero.</li>
+  </ul>
+</section>
+
+<!-- 8 ─ MPS formulation -->
+<section class="slide">
+  <div class="kicker">Supply plan · formulation</div>
+  <h2>An optimizer plans; an independent validator checks</h2>
+  <div class="cols">
+    <div>
+      <p style="margin-top:0"><b>Decisions</b> (mixed-integer program, CBC, ~30 s):
+      weekly production per variant, which ≤4 variants use the pack-out slots,
+      and shipments per geo across each geo's freight frontier.</p>
+      <ul>
+        <li><b>Hard:</b> 17,280 u/wk · 224,000 u/qtr · slot limit · inventory
+        balances · volume caps · no shipment that can't land in-horizon.</li>
+        <li><b>Soft, in strict priority:</b> unmet demand ≫ channel WOS (13)
+        &gt; supply WOS (12) &gt; freight cost &gt; holding.</li>
+        <li>WOS is measured <b>run-out style</b> — weeks of forward demand
+        covered — which matters when Black Friday burns stock 10× faster.</li>
+      </ul>
+    </div>
+    <div>
+      <p style="margin-top:0"><b>Never trust the solver:</b> after every solve,
+      9 independent checks re-verify each rule from the stored plan — including
+      replaying all inventory math from the shipment records. The pipeline
+      refuses to report success otherwise.</p>
+      <p><span class="pill">9/9 validators PASS</span></p>
+      <p style="font-size:14px;color:var(--ink2)">Two adversarial review rounds
+      (with mutation testing) hardened this: they proved a do-nothing plan
+      passed the original checks, found a phantom-shipment exploit and a
+      missing freight mode — all fixed before the results you're reading.</p>
+    </div>
+  </div>
+</section>
+
+<!-- 9 ─ plan results -->
+<section class="slide">
+  <div class="kicker">Supply plan · results</div>
+  <h2>Flat-out, pre-built, and still tight</h2>
+  <div class="stat-row">
+    <div class="stat"><div class="v">846,991 u</div><div class="l">planned production — 94.5% of annual capacity</div></div>
+    <div class="stat"><div class="v">0 u</div><div class="l">unmet demand across the year</div></div>
+    <div class="stat"><div class="v">3 of 4</div><div class="l">quarters at exactly the 224,000 u cap</div></div>
+    <div class="stat"><div class="v">12.0 wks</div><div class="l">median channel cover (target 13) — buffers are sacrificed, sell-through is protected</div></div>
+  </div>
+  <div class="chart-card" style="max-width:760px">
+    <div class="legend">
+      <span><span class="sw" style="background:var(--blue);height:10px"></span>Demand (P50)</span>
+      <span><span class="sw" style="background:var(--orange);height:10px"></span>Production</span>
+      <span>· dashed = quarterly cap</span>
+    </div>
+    <svg id="c-q" width="700" height="230"></svg>
+  </div>
+</section>
+
+<!-- 10 ─ freight -->
+<section class="slide">
+  <div class="kicker">Supply plan · freight</div>
+  <h2>$4.68M of air freight is the price of missing capacity</h2>
+  <div class="cols">
+    <div>
+      <table>
+        <tr><th>Geo</th><th>Mode</th><th class="n">Units</th><th class="n">Cost</th></tr>
+        <tr><td>G1</td><td>Air ($7, 1 wk)</td><td class="n">616,825</td><td class="n">$4.32M</td></tr>
+        <tr><td>G1</td><td>Fast Boat ($3.50, 5 wk)</td><td class="n">117,038</td><td class="n">$0.41M</td></tr>
+        <tr><td>G1</td><td>Std Ocean ($2, 8 wk)</td><td class="n">42,806</td><td class="n">$0.09M</td></tr>
+        <tr><td>G2–G5</td><td>Air / Ground / Ocean</td><td class="n">70,322</td><td class="n">$0.41M</td></tr>
+      </table>
+    </div>
+    <div>
+      <ul style="margin-top:0">
+        <li>The solver sees each geo's <b>full cost/speed frontier</b> and still
+        chooses air — a unit produced just-in-time in a capped week physically
+        cannot make an ocean lead time.</li>
+        <li>So the air premium ≈ the <b>shadow price of capacity</b>: every
+        unit of extra weekly capacity converts ~$5 of air into ocean.</li>
+        <li><b>Caveat we volunteer:</b> the air/ocean split is sensitive to how
+        hard the plan chases the 12-WOS target — it's a policy dial. The deck
+        number is the dial at the client's stated policy.</li>
+      </ul>
+    </div>
+  </div>
+</section>
+
+<!-- 11 ─ scenario setup -->
+<section class="slide">
+  <div class="kicker">Shortage scenario · setup</div>
+  <h2>4,500 units a week, split by stockout risk — not by rule of thumb</h2>
+  <div class="cols">
+    <div>
+      <ul style="margin-top:0">
+        <li>V2 + V4 share an enclosure; combined production ≤ 4,500 u/wk for
+        2023W40–W45 (Jul–Aug, the pre-holiday build window).</li>
+        <li><b>Allocation rule:</b> we don't hand-pick a split. The same
+        optimizer allocates scarce units to whichever variant is closer to
+        running out (the WOS-equalizing objective) — auditable and repeatable.</li>
+        <li><b>What it chose:</b> alternating full-cap weeks — batching
+        preserves the scarce pack-out slots — landing on an exact 50/50 split
+        (13,500 u each).</li>
+      </ul>
+    </div>
+    <div>
+      <table>
+        <tr><th>Week</th><th class="n">V2</th><th class="n">V4</th><th class="n">Cap</th></tr>
+        <tr><td>2023W40</td><td class="n">4,500</td><td class="n">0</td><td class="n">4,500</td></tr>
+        <tr><td>2023W41</td><td class="n">0</td><td class="n">4,500</td><td class="n">4,500</td></tr>
+        <tr><td>2023W42</td><td class="n">4,500</td><td class="n">0</td><td class="n">4,500</td></tr>
+        <tr><td>2023W43</td><td class="n">0</td><td class="n">4,500</td><td class="n">4,500</td></tr>
+        <tr><td>2023W44</td><td class="n">4,500</td><td class="n">0</td><td class="n">4,500</td></tr>
+        <tr><td>2023W45</td><td class="n">0</td><td class="n">4,500</td><td class="n">4,500</td></tr>
+      </table>
+    </div>
+  </div>
+</section>
+
+<!-- 12 ─ scenario impact -->
+<section class="slide">
+  <div class="kicker">Shortage scenario · impact</div>
+  <h2>Six bad weeks, an eight-month scar</h2>
+  <div class="stat-row">
+    <div class="stat"><div class="v">−346 u</div><div class="l">total volume lost — idle late-year capacity rebuilds the window deficit</div></div>
+    <div class="stat"><div class="v">~$0</div><div class="l">freight delta (−$76k, within solver tolerance)</div></div>
+    <div class="stat"><div class="v warn">2024W29</div><div class="l">when the V2+V4 supply position finally catches baseline</div></div>
+  </div>
+  <ul>
+    <li>The damage isn't volume or cost — it's <b>risk exposure over time</b>:
+    V2+V4 run ~8 months with thinner cover, right through the holiday peak.</li>
+    <li><b>Recommendation:</b> secure the enclosure supplier <i>before</i> the
+    holiday build (dual-source or buffer the component, not the finished good);
+    pre-position V2/V4 stock in the weeks before the window; and treat the
+    capacity ceiling as the root issue — with slack capacity this scar heals in
+    weeks, not months.</li>
+    <li>In the app, the scenario is a toggle: both plans are pre-solved and
+    diffed live.</li>
+  </ul>
+</section>
+
+<!-- 13 ─ next-gen: foundation models -->
+<section class="slide">
+  <div class="kicker">Where this stack goes · 1 of 3</div>
+  <h2>Foundation forecasting models: use them where history is thin</h2>
+  <ul>
+    <li><b>Reach for TimeGPT / Chronos / TimesFM where this problem is
+    weakest:</b> zero-history NPIs (V10/V11 — today an analog heuristic),
+    sparse tail geos (G3/G5), short-history exclusives. Zero-shot models
+    encode cross-domain launch and sparse-demand priors we can't learn from
+    one product's history.</li>
+    <li><b>Keep the task-specific model where it wins:</b> promo-heavy weeks on
+    a client-specific fiscal calendar with known-ahead prices — features a
+    zero-shot model can't see. Our XGBoost's edge is exactly the holiday
+    weeks.</li>
+    <li><b>Failure mode to watch:</b> calendar misalignment — these models
+    learned Gregorian seasonality; our weeks are fiscal and promos move. Score
+    before trusting.</li>
+    <li><b>The harness already exists:</b> the same 13-week holdout scorer that
+    judges XGBoost vs seasonal-naive would score any foundation model
+    head-to-head in an afternoon.</li>
+  </ul>
+</section>
+
+<!-- 14 ─ next-gen: LLM signals + agents -->
+<section class="slide">
+  <div class="kicker">Where this stack goes · 2 of 3</div>
+  <h2>LLM signals and agentic loops — mapped onto this exact codebase</h2>
+  <div class="cols">
+    <div>
+      <p style="margin-top:0"><b>LLM-augmented signals.</b> The V2+V4 scenario
+      arrived as prose; in production it arrives as a supplier email. An LLM
+      extracts structured events — <i>(variants, weeks, cap)</i> — into the
+      same scenario hook the optimizer already consumes. Auditability:
+      every extracted event keeps its source link, prompts are versioned,
+      planner overrides are logged, and an eval harness gates any change that
+      would touch forecast weights.</p>
+    </div>
+    <div>
+      <p style="margin-top:0"><b>Agentic decomposition — already half-built:</b></p>
+      <ul style="margin-top:6px">
+        <li><b>Forecaster agent</b> = forecast.py (authority ends at the demand table)</li>
+        <li><b>Planner agent</b> = mps.py (proposes, never self-certifies)</li>
+        <li><b>Verifier agent</b> = validate.py — independent today, by design</li>
+        <li><b>Scenario agent</b> = scenario.py (re-plans under disruption)</li>
+      </ul>
+      <p style="font-size:14px;color:var(--ink2)">Handoffs are typed tables in
+      SQLite; a verifier rejection bounces the plan back with the violated
+      constraint attached; humans own assumption changes (the D-decision log)
+      and disruption acceptance.</p>
+    </div>
+  </div>
+</section>
+
+<!-- 15 ─ next-gen: conversational UX -->
+<section class="slide">
+  <div class="kicker">Where this stack goes · 3 of 3</div>
+  <h2>A conversational planner that cannot break the rules</h2>
+  <table style="max-width:880px">
+    <tr><th>Planner asks</th><th>Answered by</th></tr>
+    <tr><td>"What if Retailer R4 doubles their Q4 order on V3?"</td>
+        <td><b>Deterministic</b> — edit the demand cube, re-solve, diff (the scenario machinery, generalized)</td></tr>
+    <tr><td>"Keep V1 above 12 WOS in G1 even if V12 stocks out"</td>
+        <td><b>Deterministic</b> — re-weight the objective, re-solve; the LLM only translates intent</td></tr>
+    <tr><td>"Explain why V8's plan changed this week"</td>
+        <td><b>LLM</b> — narrate the diff of two solved plans plus the binding constraints</td></tr>
+  </table>
+  <p style="margin-top:18px" class="quote">The guardrail is architectural: the
+  language layer may only emit structured actions into the validated pipeline.
+  The MILP's hard constraints and the independent validators make a
+  cap-violating plan impossible to ship — no matter what the model says.</p>
+</section>
+
+<!-- 16 ─ assumptions & close -->
+<section class="slide">
+  <div class="kicker">Assumptions &amp; open questions</div>
+  <h2>What we'd confirm with you first</h2>
+  <ul>
+    <li><b>Opening inventory</b> is assumed at your stated policy targets — the
+    data has no day-one position, and it materially shapes Q1.</li>
+    <li><b>Exclusive volumes</b> read as forward-remaining, not lifetime (V8
+    already sold 2.4× its stated number). Please confirm.</li>
+    <li><b>Freight matrix gaps</b>: G3/G5 have air only in the brief — is ocean
+    genuinely unavailable there?</li>
+    <li><b>FY2024 promo calendar</b> contains two internally contradictory
+    Promo-Q4 rows; we flagged and excluded them.</li>
+    <li>The brief says actuals end 2023W26; the file contains W27–W39 — we
+    followed the file.</li>
+  </ul>
+  <p class="foot">Everything reproducible: ./start.sh · python engine/verify.py
+  (14 independent checks) · 51 tests · docs/decisions.md D1–D25 ·
+  per-phase commit history incl. what adversarial review caught</p>
+</section>
+
+<div id="pageno">1 / 16</div>
+
+<script>
+  // keyboard navigation + page counter
+  const slides = [...document.querySelectorAll(".slide")];
+  const pageno = document.getElementById("pageno");
+  let cur = 0;
+  function go(i) {
+    cur = Math.max(0, Math.min(slides.length - 1, i));
+    slides[cur].scrollIntoView({ behavior: "smooth" });
+    pageno.textContent = `${cur + 1} / ${slides.length}`;
+  }
+  addEventListener("keydown", (e) => {
+    if (["ArrowRight", "PageDown", " "].includes(e.key)) { e.preventDefault(); go(cur + 1); }
+    if (["ArrowLeft", "PageUp"].includes(e.key)) { e.preventDefault(); go(cur - 1); }
+    if (e.key === "Home") go(0);
+    if (e.key === "End") go(slides.length - 1);
+  });
+  addEventListener("scroll", () => {
+    const i = slides.findIndex(
+      (s) => s.getBoundingClientRect().bottom > innerHeight / 2);
+    if (i >= 0 && i !== cur) { cur = i; pageno.textContent = `${i + 1} / ${slides.length}`; }
+  }, { passive: true });
+
+  // ---- charts (same numbers as the repo database) ----
+  const NS = "http://www.w3.org/2000/svg";
+  const el = (t, a) => { const e = document.createElementNS(NS, t);
+    for (const k in a) e.setAttribute(k, a[k]); return e; };
+  const css = (n) => getComputedStyle(document.documentElement).getPropertyValue(n).trim();
+
+  const actuals = [22,2090,3003,3046,2423,4424,3381,4721,6037,5089,4621,3293,3081,3033,29042,9447,3225,14333,6828,17435,96067,52003,14086,38534,53567,27228,16916,13746,7827,4472,5515,9666,8819,4721,7324,14756,9571,11859,11870,10376,12537,10224,5905,6324,18870,17172,6832,6117,6462,20067,19188,5938,3037,3326,50506,18851,13088,12702,15829,11747,5424,4234,6663,5905,5155,2623,41306,11817,4644,23610,25458,11757,13343,73140,69815,31729,62166,53800,13821,9338,5898,5614,10163,18973,18797,9016,12771,10812,9952,15624,17361,12419,5105,4368,4055,7995,19218,17785,10671,9981,6030,17548,12173,7370];
+  const fc = [[3480,5065,6380],[9444,23348,27974],[5810,8847,12670],[4003,5704,8151],[4278,6283,8633],[8395,10957,15660],[9077,12438,15059],[8552,11161,13514],[6561,8950,11953],[6785,8858,10289],[7034,9194,11784],[6922,9148,11855],[4308,5942,6907],[4764,6023,9416],[28110,35393,74329],[10138,12581,19338],[5077,6400,10022],[16369,22401,28445],[18618,22772,26407],[11026,15247,21102],[24855,32247,41601],[61705,70567,92663],[52751,65346,75241],[44465,51698,63199],[43892,56321,67468],[34799,42951,50721],[19514,23145,25481],[13781,16090,21689],[9419,11733,15203],[5482,7392,9420],[4068,5677,9188],[12537,19884,26139],[13905,17892,21726],[11553,13816,17227],[11070,14417,17604],[10845,13467,16548],[11597,14572,16201],[13181,16646,18921],[11653,14920,16517],[11236,13706,15029],[9712,12197,13861],[8562,10638,12547],[7606,9334,11082],[11341,13809,16903],[20145,25775,30936],[14409,17251,20020],[11383,13907,15312],[11149,13786,15860],[10371,13010,14892],[15585,19401,21877],[16419,20258,22074],[11695,14294,16794]];
+
+  (function () {
+    const svg = document.getElementById("c-demand");
+    const W = 520, H = 240, L = 40, R = 8, T = 10, B = 24, n = 156, ymax = 100000;
+    const x = (i) => L + (i * (W - L - R)) / (n - 1);
+    const y = (v) => T + (H - T - B) * (1 - Math.min(v, ymax) / ymax);
+    for (let g = 0; g <= 4; g++) {
+      const v = (ymax * g) / 4;
+      svg.appendChild(el("line", { x1: L, x2: W - R, y1: y(v), y2: y(v),
+        stroke: css("--line"), "stroke-width": 1 }));
+      const t = el("text", { x: L - 5, y: y(v) + 3.5, "text-anchor": "end" });
+      t.textContent = v ? v / 1000 + "k" : "0"; svg.appendChild(t);
+    }
+    let band = "M";
+    fc.forEach((f, i) => (band += x(104 + i) + "," + y(f[2]) + " "));
+    for (let i = fc.length - 1; i >= 0; i--) band += x(104 + i) + "," + y(fc[i][0]) + " ";
+    svg.appendChild(el("path", { d: band + "Z", fill: css("--band") }));
+    const line = (pts, color) => {
+      let d = "";
+      pts.forEach((p, i) => (d += (i ? "L" : "M") + p[0] + "," + p[1]));
+      svg.appendChild(el("path", { d, fill: "none", stroke: color, "stroke-width": 2 }));
+    };
+    line(actuals.map((v, i) => [x(i), y(v)]), css("--blue"));
+    line(fc.map((f, i) => [x(104 + i), y(f[1])]), css("--orange"));
+    const s = x(103.5);
+    svg.appendChild(el("line", { x1: s, x2: s, y1: T, y2: H - B,
+      stroke: css("--ink2"), "stroke-dasharray": "3 4" }));
+    [["2021W41", 0], ["2023W40", 104], ["2024W39", 155]].forEach(([lab, i]) => {
+      const t = el("text", { x: x(i), y: H - 8, "text-anchor": i ? (i > 150 ? "end" : "middle") : "start" });
+      t.textContent = lab; svg.appendChild(t);
+    });
+  })();
+
+  (function () {
+    const svg = document.getElementById("c-q");
+    const qs = [
+      { q: "2023Q4", d: 125895, p: 224000 },
+      { q: "2024Q1", d: 439947, p: 224000 },
+      { q: "2024Q2", d: 189651, p: 224000 },
+      { q: "2024Q3", d: 197366, p: 174991 },
+    ];
+    const W = 700, H = 230, L = 46, R = 10, T = 12, B = 26, ymax = 480000;
+    const gw = (W - L - R) / 4;
+    const y = (v) => T + (H - T - B) * (1 - v / ymax);
+    for (let g = 0; g <= 4; g++) {
+      const v = (ymax * g) / 4;
+      svg.appendChild(el("line", { x1: L, x2: W - R, y1: y(v), y2: y(v),
+        stroke: css("--line"), "stroke-width": 1 }));
+      const t = el("text", { x: L - 5, y: y(v) + 3.5, "text-anchor": "end" });
+      t.textContent = v / 1000 + "k"; svg.appendChild(t);
+    }
+    const capY = y(224000);
+    svg.appendChild(el("line", { x1: L, x2: W - R, y1: capY, y2: capY,
+      stroke: css("--ink2"), "stroke-width": 1.5, "stroke-dasharray": "6 4" }));
+    qs.forEach((q, i) => {
+      const cx = L + gw * i + gw / 2, bw = 44;
+      svg.appendChild(el("rect", { x: cx - bw - 1, y: y(q.d), width: bw,
+        height: H - B - y(q.d), rx: 4, fill: css("--blue") }));
+      svg.appendChild(el("rect", { x: cx + 1, y: y(q.p), width: bw,
+        height: H - B - y(q.p), rx: 4, fill: css("--orange") }));
+      if (q.d > 224000) {
+        const wt = el("text", { x: cx - bw / 2, y: y(q.d) - 6, "text-anchor": "middle" });
+        wt.setAttribute("fill", css("--warn")); wt.textContent = "2.0× cap";
+        svg.appendChild(wt);
+      }
+      const t = el("text", { x: cx, y: H - 8, "text-anchor": "middle" });
+      t.textContent = q.q; svg.appendChild(t);
+    });
+  })();
+</script>
