@@ -15,6 +15,11 @@ export default function Home() {
       title: "Shortage Scenario",
       body: "Toggle the V2+V4 enclosure shortage (4,500 u/wk, 6 weeks) and see the plan diff: allocation, deltas, recovery.",
     },
+    {
+      href: "/signals",
+      title: "Signals & Agents",
+      body: "LLM-extracted planning events with provenance and a human approval gate, plus the agentic loop's audit trail.",
+    },
   ];
   return (
     <div className="max-w-3xl">
@@ -27,7 +32,7 @@ export default function Home() {
         MPS → scenario</code>). To re-plan with new inputs, re-run the pipeline
         and refresh.
       </p>
-      <div className="grid gap-4 sm:grid-cols-3">
+      <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
         {cards.map((c) => (
           <a
             key={c.href}

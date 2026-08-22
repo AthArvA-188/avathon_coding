@@ -34,7 +34,7 @@ python engine/run_pipeline.py --all        # or --ingest --forecast --mps --scen
 python engine/run_pipeline.py --signals    # §3.4: extract events from the inbox + eval
 python engine/run_pipeline.py --agents     # §3.4: run the agentic planning loop
 
-cd engine && python -m pytest tests -q     # 54 tests, ~25 s
+cd engine && python -m pytest tests -q     # 66 tests, ~30 s
 python engine/verify.py                    # 14 independent spot checks
 
 cd ../app && npm install && npm run dev    # UI on http://localhost:3000
@@ -56,9 +56,9 @@ cd ../app && npm install && npm run dev    # UI on http://localhost:3000
 | `engine/planz/llm.py` + `signals.py` | **§3.4 prototype:** unstructured inbox → typed events with provenance, human approval gate, eval harness (Claude backend if `ANTHROPIC_API_KEY` is set, offline rules backend otherwise) — run `--signals` |
 | `engine/planz/agents.py` | **§3.4 prototype:** agentic loop — signal extraction → approval → greedy-first proposal → verifier (constraints + service policy) → escalate to MILP → publish or `needs_human`, fully logged in `agent_log` — run `--agents` |
 | `engine/verify.py` | Human-friendly auditor: 14 checks sharing no code with the pipeline |
-| `engine/tests/` | 51 pytest tests (calendar ground truth, xlsx reconciliation, score bands, MILP smoke solve, validator mutations) |
-| `app/` | Next.js UI: forecast explorer, MPS & pack-out view, scenario toggle |
-| `docs/` | PRD, decision log (D1–D25 with options + rationale), progress log, technical documentation |
+| `engine/tests/` | 66 pytest tests (calendar ground truth, xlsx reconciliation, score bands, MILP smoke solve, validator mutations, signal sanitization, agent-loop gates) |
+| `app/` | Next.js UI: forecast explorer, MPS & pack-out view, scenario toggle, signals & agent-log audit page |
+| `docs/` | PRD, decision log (D1–D28 with options + rationale), progress log, technical documentation |
 
 ## Headline results
 

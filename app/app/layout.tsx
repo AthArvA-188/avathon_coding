@@ -22,6 +22,7 @@ const nav = [
   { href: "/forecast", label: "Forecast" },
   { href: "/plan", label: "MPS & Pack-out" },
   { href: "/scenario", label: "Shortage Scenario" },
+  { href: "/signals", label: "Signals & Agents" },
 ];
 
 export default function RootLayout({ children }: LayoutProps<"/">) {

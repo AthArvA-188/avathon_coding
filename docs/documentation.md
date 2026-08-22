@@ -88,6 +88,8 @@ avathon_coding/
 │   │   ├── heuristic.py        # second method: greedy plan (D26)
 │   │   ├── validate.py         # independent constraint validators
 │   │   ├── scenario.py         # V2+V4 shared-cap re-solve + diff
+│   │   ├── llm.py + signals.py # §3.4: inbox → audited events (D27)
+│   │   ├── agents.py           # §3.4: agentic loop (D28)
 │   │   └── db.py               # schema, writers, readers
 │   ├── verify.py               # 14-check independent auditor
 │   └── tests/
