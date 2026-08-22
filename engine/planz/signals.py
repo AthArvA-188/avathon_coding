@@ -34,6 +34,15 @@ ROOT = Path(__file__).resolve().parents[2]
 DEFAULT_INBOX = ROOT / "engine" / "signals_inbox"
 
 
+def _content_key(event_type: str, params: dict) -> str:
+    """Filename-independent identity of an event — used to enforce that a
+    rejected event stays rejected no matter which file re-introduces it
+    (adversarial review round 5: the content_hash includes the source
+    filename, so re-adding identical content under a NEW name would
+    otherwise create a fresh approvable pending row)."""
+    return json.dumps({"t": event_type, "p": params}, sort_keys=True)
+
+
 def _hash(source: str, event_type: str, params: dict, extra: str = "") -> str:
     # `extra` carries the image sha256 for vision rows: if the picture's
     # bytes change under the same filename, the event re-keys instead of
@@ -120,6 +129,18 @@ def extract_inbox(db_path, inbox_dir=None,
         conn.execute("BEGIN IMMEDIATE")
         try:
             db.init_signals_schema(conn)
+            # a rejected event is rejected by CONTENT, not by filename: drop
+            # any freshly-extracted event whose (type, params) matches a
+            # standing rejection, so re-adding it under a new name can't
+            # resurrect it as an approvable pending row (round-5 fix)
+            rejected_keys = {
+                _content_key(r["event_type"],
+                             json.loads(r["params_json"]))
+                for r in conn.execute("SELECT event_type, params_json FROM"
+                                      " signals WHERE status = 'rejected'")}
+            if rejected_keys:
+                found = [e for e in found if _content_key(
+                    e["event_type"], e["params"]) not in rejected_keys]
             hashes = [e["hash"] for e in found]
             skipped_names = [name for name, _ in skipped]
             ph = ",".join("?" for _ in hashes) or "''"

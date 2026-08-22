@@ -1,4 +1,5 @@
 "use client";
+import HowTo from "@/components/HowTo";
 import Provenance from "@/components/Provenance";
 import { Card, fmt, Stat, useJson } from "@/components/ui";
 
@@ -42,9 +43,21 @@ export default function AgentsPage() {
         lands in this append-only log.
       </p>
 
+      <HowTo
+        dos={[
+          <>Read the log top-to-bottom as one run's story: extract → gate → propose → verify → publish (or escalate).</>,
+          <>To trigger a fresh run: approve events on the Signals page, then <code className="font-mono">python engine/run_pipeline.py --agents</code> and refresh.</>,
+        ]}
+        watch={[
+          <>The <b>REJECTED rows are the feature</b>: the greedy proposal bounced because its unmet demand blew the 0.5% service policy; the MILP passed and was published. An agent a verifier can't refuse is just automation with extra steps.</>,
+          <>The verifier reads results from the <i>database</i>, never from the planner's self-report.</>,
+          <>“needs_human” outcomes are the loop admitting it's out of authority — that's the design working, not failing.</>,
+        ]}
+      />
+
       <Provenance
         sources="agent_log table (append-only, spans runs) + plan tables under plan_id 'agentic'; signals come from the Signals page's table."
-        model="Orchestrated loop over the existing engines: greedy heuristic proposal first, escalation to the PuLP/CBC MILP on rejection. VerifierAgent = the 9 independent constraint checks (validate.py) + a service policy computed from persisted inventory rows — never from planner self-reports."
+        model="Orchestrated loop over the existing engines: greedy heuristic proposal first, escalation to the PuLP/CBC MILP on rejection. VerifierAgent = the 9 base constraint checks (validate.py) plus a conditional check per active hook (e.g. extra-cap, mode-block — so a plan carrying signal events runs 10-11), plus a service policy computed from persisted inventory rows — never from planner self-reports."
         params={[
           "Service policy: unmet demand ≤ 0.5% of (shock-adjusted) forecast demand",
           "Demand-delta guard: shocks moving aggregate demand >15% always require human sign-off",

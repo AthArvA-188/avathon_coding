@@ -302,6 +302,22 @@ def _extract_rules(text: str) -> list[dict]:
                            "multiplier": 1 + int(m.group(1)) / 100},
                 "evidence": _sentence_of(text, m.start()), "confidence": 1.0})
 
+    # single-variant uplift ("a 25% uplift for Variant V3 in Geo G2 during
+    # 2024W05-2024W06") — the shape the conversational planner's what-if
+    # generator emits, so the offline path parses it too (round-5)
+    m = re.search(r"a\s+(\d+)%\s+uplift\s+for\s+(Variant V\d+)\s+"
+                  r"in\s+(Geo G\d)\s+during\s+(\d{4}W\d{2})\s*[-–]\s*"
+                  r"(\d{4}W\d{2})", text, re.IGNORECASE)
+    if m:
+        start = _n(m.group(4))
+        events.append({
+            "event_type": "demand_shock",
+            "params": {"variant": m.group(2), "geo": m.group(3),
+                       "start_offset": start,
+                       "n_weeks": _n(m.group(5)) - start + 1,
+                       "multiplier": 1 + int(m.group(1)) / 100},
+            "evidence": _sentence_of(text, m.start()), "confidence": 1.0})
+
     return events
 
 

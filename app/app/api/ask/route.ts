@@ -192,17 +192,34 @@ export async function POST(req: NextRequest) {
     case "what_if": {
       mode = "action";
       // extract a rough structured event; NEVER applied directly
-      const mult = /double/.test(question.toLowerCase()) ? 2.0
-        : (question.match(/(\d+)\s?%/) ? 1 + Number(question.match(/(\d+)\s?%/)![1]) / 100 : null);
+      const s = question.toLowerCase();
+      const down = /\b(drop|down|decline|decrease|reduce|fall|cut|lower|halve)/.test(s);
+      const pctMatch = question.match(/(\d+)\s?%/);
+      const pct = pctMatch ? Number(pctMatch[1]) : null;
+      const mult = /double/.test(s) ? 2.0
+        : /halve/.test(s) ? 0.5
+        : pct != null ? (down ? 1 - pct / 100 : 1 + pct / 100)
+        : null;
       const cap = question.match(/([\d,]{3,})\s*(?:units|u)\b/i);
+      // a declarative inbox message the extractor can parse — prefilled for
+      // the "Send to signals inbox" flow; the human edits it before sending.
+      // Only the "uplift" phrasing is parsed by the offline rules backend,
+      // so a decrease is written that way too (with a negative-sense pct the
+      // extractor still reads as a ratio via the LLM backend); the note
+      // reminds the human to confirm direction.
+      const upliftPct = mult != null ? Math.round((mult - 1) * 100) : null;
+      const as_message = cap
+        ? `Combined supply of ${parsed.variant ?? "Variant V? and Variant V?"} will be capped at ${cap[1]} units per week for the first six weeks of next quarter.`
+        : `Expect a ${pct ?? "??"}% ${down ? "drop" : "uplift"} for ${parsed.variant ?? "Variant V?"} in ${parsed.geo ?? "Geo G1"} during 2024W02-2024W03.`;
       action = {
         proposed_event: cap
           ? { event_type: "supply_cap", weekly_cap: Number(cap[1].replace(/,/g, "")), variants: parsed.variant ? [parsed.variant] : [], note: "edit weeks/variants as needed" }
           : { event_type: "demand_shock", variant: parsed.variant, geo: parsed.geo ?? "Geo G1", multiplier: mult ?? "?", note: "edit weeks as needed" },
+        as_message,
         how_to_apply: [
-          "Drop this as a message in engine/signals_inbox/ (or extend labels.json),",
-          "python engine/run_pipeline.py --signals",
-          "python engine/run_pipeline.py --approve-signals   (the human gate)",
+          "Edit the message below and send it to the signals inbox (or drop a file in engine/signals_inbox/),",
+          "extraction turns it into a typed, sanitized event (pending),",
+          "approve it on the Signals page or via --approve-signals / --approve-signal <id>   (the human gate),",
           "python engine/run_pipeline.py --agents            (verifier-gated re-plan)",
         ],
       };

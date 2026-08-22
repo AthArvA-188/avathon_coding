@@ -1,5 +1,7 @@
-// Read-only access to planz.db (built by the Python pipeline).
-// The app never writes: re-planning happens by re-running the pipeline.
+// Read-only access to planz.db (built by the Python pipeline). Every page
+// and query route reads through here. The sole write surface is
+// lib/mutate.ts (signals human gate + inbox files, docs D31); plan tables
+// are never written by the app — re-planning happens through the pipeline.
 import Database from "better-sqlite3";
 import path from "path";
 

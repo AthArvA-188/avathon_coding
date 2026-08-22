@@ -171,7 +171,7 @@ def test_forecast_integration(forecast_db):
         assert band > 1.0
         # horizon level sanity: catches recursion feedback bugs
         total = c.execute("SELECT SUM(p50) FROM forecast").fetchone()[0]
-        assert 800_000 < total < 1_150_000                   # baseline 952,865
+        assert 800_000 < total < 1_150_000                   # baseline 952,860
         # cap compliance: horizon totals within remaining volumes
         v5 = c.execute("SELECT SUM(p50) FROM forecast"
                        " WHERE variant = 'Variant V5'").fetchone()[0]

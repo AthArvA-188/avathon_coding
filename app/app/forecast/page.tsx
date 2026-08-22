@@ -10,6 +10,7 @@ import {
   XAxis,
   YAxis,
 } from "recharts";
+import HowTo from "@/components/HowTo";
 import Provenance from "@/components/Provenance";
 import { Card, fmt, Meta, Sel, useJson } from "@/components/ui";
 
@@ -51,6 +52,19 @@ export default function ForecastPage() {
         Net sell-through, actuals 2021W41–2023W39 and forecast 2023W40–2024W39.
         Weeks are fiscal (year starts ~October).
       </p>
+      <HowTo
+        dos={[
+          <>Start with all filters on <b>All</b> — the aggregate view shows the holiday spike the whole plan revolves around.</>,
+          <>Then pick <b>Variant V5</b>: a single-retailer deal variant that orders in lumps. The model scores badly there and the table below says so openly.</>,
+          <>Check the holdout table against any variant you select — the scores re-filter with you.</>,
+        ]}
+        watch={[
+          <>Weeks are <b>fiscal</b> (year starts ~October): Oct–Dec — the holiday quarter — is fiscal <b>2024Q1</b>; fiscal 2023Q4 is Jul–Sep.</>,
+          <>XGBoost's 37.6% WAPE vs seasonal-naive's 50.7% — that gap is the model's earned value, not a claim.</>,
+          <>The P10–P90 band widening into the holiday quarter: that spread is why the plan chases buffer stock.</>,
+        ]}
+      />
+
       <Provenance
         sources="actuals table (ingested from program_z.xlsx 'Data - 104 weeks', reconciled to Excel at full series grain) and the forecast table written by engine/planz/forecast.py."
         model="One global XGBoost quantile model (P10/P50/P90) across all 124 series, trained on log(units) with volume weights, recursing week-by-week over the 52-week horizon. V10/V11 (zero history) ramp on deseasonalized V8/V9 analog curves scaled to their committed deal volumes; V12 is EOL-zero; exclusive/one-time-deal volumes cap cumulative forecasts (docs D23)."
@@ -59,7 +73,7 @@ export default function ForecastPage() {
           "Backtest: last 13 actual weeks (2023W27–W39) held out; baselines: naive & seasonal-naive",
           "Adopted config after logged experiments (D9): 37.6% WAPE / +3.3% bias vs seasonal-naive 50.7%",
         ]}
-        takeaway="A 952,865-unit P50 year vs 896,000 units of capacity — the demand signal that forces everything downstream."
+        takeaway="A 952,860-unit P50 year vs 896,000 units of capacity — the demand signal that forces everything downstream."
       />
 
       <div className="flex flex-wrap gap-4 mb-5">

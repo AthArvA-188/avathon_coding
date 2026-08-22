@@ -34,7 +34,7 @@ python engine/run_pipeline.py --all        # or --ingest --forecast --mps --scen
 python engine/run_pipeline.py --signals    # §3.4: extract events from the inbox + eval
 python engine/run_pipeline.py --agents     # §3.4: run the agentic planning loop
 
-cd engine && python -m pytest tests -q     # 79 tests, ~30 s
+cd engine && python -m pytest tests -q     # 82 tests, ~30 s
 python engine/verify.py                    # 14 independent spot checks
 
 cd ../app && npm install && npm run dev    # UI on http://localhost:3000
@@ -56,8 +56,8 @@ cd ../app && npm install && npm run dev    # UI on http://localhost:3000
 | `engine/planz/llm.py` + `signals.py` | **§3.4 prototype:** unstructured inbox — text **and images** (scanned notices, flyers via claude-sonnet-5 vision; transcription + image hash persisted for the human gate) → typed events with provenance, human approval gate, eval harness (Claude backend if `ANTHROPIC_API_KEY` is set, offline rules backend otherwise; images are skipped honestly offline) — run `--signals` |
 | `engine/planz/agents.py` | **§3.4 prototype:** agentic loop — signal extraction → approval → greedy-first proposal → verifier (constraints + service policy) → escalate to MILP → publish or `needs_human`, fully logged in `agent_log` — run `--agents` |
 | `engine/verify.py` | Human-friendly auditor: 14 checks sharing no code with the pipeline |
-| `engine/tests/` | 79 pytest tests (calendar ground truth, xlsx reconciliation, score bands, MILP smoke solve, validator mutations, signal sanitization, vision provenance + round-4 hardening regressions, agent-loop gates) |
-| `app/` | Next.js UI: forecast explorer, MPS & pack-out view, scenario toggle, signals page (decoded events + approval status), agents audit trail — every page opens with a "where these numbers come from" provenance strip |
+| `engine/tests/` | 82 pytest tests (calendar ground truth, xlsx reconciliation, score bands, MILP smoke solve, validator mutations, signal sanitization, vision provenance + round-4/5 hardening regressions, agent-loop gates) |
+| `app/` | Next.js UI: forecast explorer, MPS & pack-out view, scenario toggle, signals page (decoded events + approve/reject buttons + inbox create/delete — the only write surface, and it's the human gate), agents audit trail — every page opens with "How to use this page" and "Where these numbers come from" strips; home adds setup, a 60-second demo script, and troubleshooting |
 | `app/app/planner/` | **§3.4 prototype:** "Ask the Planner" — voice (Web Speech API) or text → claude-sonnet-5 intent parser (regex fallback offline) → whitelisted SQL with the executed statements shown; what-ifs become gated signal events, never chat-side edits |
 | `docs/` | PRD, decision log (D1–D30 with options + rationale), progress log, technical documentation |
 
@@ -65,7 +65,7 @@ cd ../app && npm install && npm run dev    # UI on http://localhost:3000
 
 - Holdout forecast (13 hidden weeks): **37.6% WAPE / +3.3% bias** vs
   seasonal-naive 50.7% and naive 89.1%.
-- Horizon demand **952,865 u vs 896,000 u annual capacity** — the holiday
+- Horizon demand **952,860 u vs 896,000 u annual capacity** — the holiday
   quarter alone wants 2× the quarterly cap, so the plan pre-builds and runs
   3 of 4 quarters at exactly 224,000 u.
 - Baseline plan: **846,991 u, zero unmet demand, $5.22M freight** — of which

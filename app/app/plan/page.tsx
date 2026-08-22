@@ -13,6 +13,7 @@ import {
   XAxis,
   YAxis,
 } from "recharts";
+import HowTo from "@/components/HowTo";
 import Provenance from "@/components/Provenance";
 import { Card, fmt, Meta, Sel, Stat, useJson } from "@/components/ui";
 
@@ -62,6 +63,20 @@ export default function PlanPage() {
         Solved by the MILP; every hard constraint re-verified by independent
         validators after the solve.
       </p>
+
+      <HowTo
+        dos={[
+          <>Scroll the pack-out grid sideways and count filled cells in any row — never more than 4 (the slot cap), and the “slots” column keeps score.</>,
+          <>Switch variant/geo under the WOS chart and watch the two lines against their 12- and 13-week targets.</>,
+          <>Cross-check any stat here by asking the same question on <b>Ask the Planner</b> — it prints the SQL.</>,
+        ]}
+        watch={[
+          <>The quarters-at-cap stat: <b>3 of 4 quarters sit at exactly 224,000 units</b> — the year is capacity-bound, not demand-bound. That's the whole story in one number.</>,
+          <>Freight table: <b>$4.68M of $5.22M is Air</b>. Air is the shadow price of scarce capacity — production lands just-in-time and only air makes the date.</>,
+          <>WOS lines eroding below target is <b>by design</b>: sell-through is protected first, buffers are spent. The strip below states the priority order.</>,
+          <>The validators stat: every hard constraint re-verified <i>after</i> the solve by independent checks.</>,
+        ]}
+      />
 
       <Provenance
         sources="mps, shipments and inventory tables (plan_id 'baseline') written by engine/planz/mps.py; demand consumed from the forecast table (P50)."

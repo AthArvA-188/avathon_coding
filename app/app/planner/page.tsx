@@ -1,5 +1,6 @@
 "use client";
 import { useEffect, useRef, useState } from "react";
+import HowTo from "@/components/HowTo";
 import Provenance from "@/components/Provenance";
 import { Card } from "@/components/ui";
 
@@ -12,6 +13,7 @@ type AskResponse = {
   sql: string[];
   action: {
     proposed_event: Record<string, unknown>;
+    as_message?: string;
     how_to_apply: string[];
   } | null;
 };
@@ -34,6 +36,9 @@ export default function PlannerPage() {
   const [busy, setBusy] = useState(false);
   const [res, setRes] = useState<AskResponse | null>(null);
   const [voiceOk, setVoiceOk] = useState(false);
+  const [draft, setDraft] = useState("");
+  const [sending, setSending] = useState(false);
+  const [sendNote, setSendNote] = useState("");
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const recRef = useRef<any>(null);
 
@@ -68,10 +73,18 @@ export default function PlannerPage() {
       });
       const data = (await r.json()) as AskResponse;
       setRes(data);
+      setDraft(data.action?.as_message ?? "");
+      setSendNote("");
       if (speak && "speechSynthesis" in window) {
         window.speechSynthesis.cancel();
         window.speechSynthesis.speak(new SpeechSynthesisUtterance(data.answer));
       }
+    } catch {
+      setRes({
+        parser: "-", intent: {}, mode: "deterministic",
+        answer: "Request failed — is the server still running?",
+        table: [], sql: [], action: null,
+      });
     } finally {
       setBusy(false);
     }
@@ -88,6 +101,20 @@ export default function PlannerPage() {
         questions become structured events for the gated signals flow — the
         language layer can never change a plan directly.
       </p>
+
+      <HowTo
+        dos={[
+          <>Click <b>🎤 speak</b> (allow the mic prompt) and ask “How much are we spending on air freight?” — or press an example chip.</>,
+          <>Try a what-if: “What if demand for V1 in G1 goes up 20%?” — then edit the prefilled inbox message and send it into the gated signals flow.</>,
+          <>Tick <b>speak answers</b> to have replies read back.</>,
+        ]}
+        watch={[
+          <>The <b>SQL under every answer</b> — the language model only picks the intent; every number comes from a parameterized query you can re-run yourself.</>,
+          <>What-ifs never change anything here: they become pending signal events that still need human approval and a verifier-gated re-plan.</>,
+          <>The parser tag in the answer note: <code className="font-mono">claude-sonnet-5</code> with a key, <code className="font-mono">rules</code> (regex) without one.</>,
+          <>Mic greyed out? The browser lacks the Web Speech API — Chrome or Edge, or just type.</>,
+        ]}
+      />
 
       <Provenance
         sources="planz.db plan tables (mps, shipments, inventory, forecast, calendar) — the same rows every other page reads."
@@ -167,6 +194,56 @@ export default function PlannerPage() {
                 <ol className="list-decimal pl-5 text-xs text-zinc-600 dark:text-zinc-400">
                   {res.action.how_to_apply.map((s) => <li key={s}>{s}</li>)}
                 </ol>
+                <div className="font-medium mt-3 mb-1">
+                  Inbox message (edit, then send — it goes through real
+                  extraction and the same approval gate)
+                </div>
+                <textarea
+                  value={draft}
+                  onChange={(e) => setDraft(e.target.value)}
+                  rows={2}
+                  className="w-full rounded-lg border border-zinc-300 dark:border-zinc-700 bg-white dark:bg-zinc-900 px-3 py-2 text-xs font-mono"
+                />
+                <div className="flex items-center gap-3 mt-1.5">
+                  <button
+                    onClick={async () => {
+                      // block only the unfilled template placeholders ("V?",
+                      // "G?", "??"), not any innocent '?' in an edited message
+                      if (!draft.trim() || /V\?|G\?|\?\?/.test(draft)) {
+                        setSendNote("fill in the V? / G? / ?? placeholders first — the extractor needs concrete entities");
+                        return;
+                      }
+                      setSending(true);
+                      setSendNote("");
+                      try {
+                        const r = await fetch("/api/inbox", {
+                          method: "POST",
+                          headers: { "content-type": "application/json" },
+                          body: JSON.stringify({ text: draft, extract: true }),
+                        });
+                        const data = await r.json();
+                        if (!data.ok) setSendNote(`✗ ${data.error}`);
+                        else if (data.extraction?.ran) {
+                          const s = data.extraction.summary as { new_pending?: number } | string;
+                          setSendNote(`✓ saved as ${data.filename}; extraction ran (${typeof s === "object" && s ? `${s.new_pending ?? 0} new pending event(s)` : "done"}) — review it on the Signals page`);
+                        } else {
+                          setSendNote(`✓ saved as ${data.filename}. ${data.extraction?.error ?? ""}`);
+                        }
+                      } catch {
+                        setSendNote("✗ request failed — is the server still running?");
+                      } finally {
+                        setSending(false);
+                      }
+                    }}
+                    disabled={sending || !draft.trim()}
+                    className="rounded-lg bg-zinc-900 dark:bg-zinc-100 text-white dark:text-zinc-900 px-3.5 py-1.5 text-xs font-medium disabled:opacity-50"
+                  >
+                    {sending ? "sending…" : "send to signals inbox"}
+                  </button>
+                  {sendNote && (
+                    <span className="text-[11px] text-zinc-600 dark:text-zinc-400">{sendNote}</span>
+                  )}
+                </div>
               </div>
             )}
           </Card>

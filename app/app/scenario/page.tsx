@@ -11,6 +11,7 @@ import {
   XAxis,
   YAxis,
 } from "recharts";
+import HowTo from "@/components/HowTo";
 import Provenance from "@/components/Provenance";
 import { Card, fmt, Stat, useJson } from "@/components/ui";
 
@@ -55,13 +56,25 @@ export default function ScenarioPage() {
         compares them instantly.
       </p>
 
+      <HowTo
+        dos={[
+          <>Flip the toggle off and on — both plans are pre-solved, so the diff is instant.</>,
+          <>Read the allocation table week by week: watch who gets the scarce 4,500 units.</>,
+        ]}
+        watch={[
+          <>The headline deltas look boring — <b>−346 units, freight ~flat</b>. The real damage is in the recovery chart: supply position doesn't rejoin baseline until <b>2024W29</b> (≈ mid-April). A 6-week shortage, an 8-month scar.</>,
+          <>The solver <b>alternates full-cap weeks</b> between V2 and V4 (batching preserves pack-out slots) and lands on an exact 50/50 split nobody asked it for.</>,
+          <>Why no catch-up sooner: a factory already at capacity has nothing spare — that's the punchline of the whole assignment.</>,
+        ]}
+      />
+
       <Provenance
         sources="the same mps/shipments/inventory tables, under two plan_ids: 'baseline' and 'scenario' — both pre-solved by the pipeline, so this toggle is a query, not a re-solve."
         model="Identical MILP to the baseline plus one hard constraint: combined V2+V4 production ≤ 4,500 u/week for 2023W40–W45 (the brief's shared-enclosure shortage). The V2-vs-V4 split is not hand-picked — the WOS-equalizing objective allocates scarce units to whichever variant is closer to running out."
         params={[
           "Constrained window: first 6 weeks of CQ+1 (Jul–Aug, the pre-holiday build window)",
           "Observed allocation: alternating full-cap weeks (pack-out slot economics) → exact 50/50",
-          "Validators re-checked incl. the shared-cap constraint (11 checks on this plan)",
+          "Validators re-checked incl. the shared-cap constraint (10 checks on this plan: the 9 base checks + the extra-cap check)",
         ]}
         takeaway="Volume and cost barely move (−346 u, ~flat freight) — the real damage is time: V2+V4 cover trails baseline for ~8 months because a factory at capacity cannot catch up."
       />

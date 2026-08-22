@@ -1,4 +1,6 @@
 "use client";
+import { useState } from "react";
+import HowTo from "@/components/HowTo";
 import Provenance from "@/components/Provenance";
 import { Card, Stat, useJson } from "@/components/ui";
 
@@ -9,6 +11,11 @@ type Signal = {
   transcription: string; source_sha256: string;
 };
 type Data = { available: boolean; signals: Signal[] };
+type InboxFile = {
+  name: string; kind: "text" | "image"; bytes: number; protected: boolean;
+  events: Record<string, number>;
+};
+type Inbox = { files: InboxFile[]; hasKey: boolean };
 
 const statusStyle: Record<string, string> = {
   approved: "bg-emerald-100 text-emerald-900 dark:bg-emerald-950 dark:text-emerald-200",
@@ -22,7 +29,88 @@ const typeLabel: Record<string, string> = {
 };
 
 export default function SignalsPage() {
-  const d = useJson<Data>("/api/signals");
+  const [bump, setBump] = useState(0);
+  const d = useJson<Data>(`/api/signals?r=${bump}`);
+  const inbox = useJson<Inbox>(`/api/inbox?r=${bump}`);
+  const [busyId, setBusyId] = useState<number | null>(null);
+  const [gateNote, setGateNote] = useState("");
+  const [msg, setMsg] = useState("");
+  const [fname, setFname] = useState("");
+  const [creating, setCreating] = useState(false);
+  const [createNote, setCreateNote] = useState("");
+  const [confirmDel, setConfirmDel] = useState("");
+
+  async function act(id: number, action: "approve" | "reject") {
+    setBusyId(id);
+    try {
+      const r = await fetch("/api/signals/action", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ action, id }),
+      });
+      const data = await r.json();
+      setGateNote(data.note ?? data.error ?? "");
+      setBump((b) => b + 1);
+    } catch {
+      setGateNote("request failed — is the server still running?");
+    } finally {
+      setBusyId(null);
+    }
+  }
+
+  async function createMessage() {
+    if (!msg.trim()) return;
+    setCreating(true);
+    setCreateNote("");
+    try {
+      const r = await fetch("/api/inbox", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({
+          text: msg, filename: fname.trim() || undefined, extract: true,
+        }),
+      });
+      const data = await r.json();
+      if (!data.ok) setCreateNote(`✗ ${data.error}`);
+      else if (data.extraction?.ran) {
+        const s = data.extraction.summary as
+          { new_pending?: number; skipped?: { file: string }[] } | string;
+        setCreateNote(
+          typeof s === "object" && s
+            ? `✓ saved as ${data.filename} — extraction ran: ${s.new_pending ?? 0} new pending event(s)${s.skipped?.length ? `, ${s.skipped.length} image file(s) skipped` : ""}`
+            : `✓ saved as ${data.filename} — extraction ran`
+        );
+        setMsg(""); setFname("");
+      } else {
+        setCreateNote(`✓ saved as ${data.filename}. ${data.extraction?.error ?? "Run: python engine/run_pipeline.py --signals"}`);
+        setMsg(""); setFname("");
+      }
+      setBump((b) => b + 1);
+    } catch {
+      setCreateNote("✗ request failed — is the server still running?");
+    } finally {
+      setCreating(false);
+    }
+  }
+
+  async function deleteFile(name: string) {
+    if (confirmDel !== name) { setConfirmDel(name); return; }
+    setConfirmDel("");
+    try {
+      const r = await fetch("/api/inbox", {
+        method: "DELETE",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ filename: name }),
+      });
+      const data = await r.json();
+      setCreateNote(data.ok
+        ? `✓ deleted ${name} (${data.removedPending} pending event(s) removed; ${data.note})`
+        : `✗ ${data.error}`);
+      setBump((b) => b + 1);
+    } catch {
+      setCreateNote("✗ request failed — is the server still running?");
+    }
+  }
 
   if (d && !d.available) {
     return (
@@ -51,15 +139,30 @@ export default function SignalsPage() {
         agentic loop that consumes these lives on its own page.
       </p>
 
+      <HowTo
+        dos={[
+          <>Open <b>image transcription</b> on the promo-flyer card and read its fine print against the extracted values.</>,
+          <>Approve or reject pending events with the buttons on each card — that IS the human gate (same SQL as <code className="font-mono">--approve-signal</code>).</>,
+          <>Add your own message in the <b>Inbox</b> card below (e.g. “Expect a 25% uplift for Variant V3 in Geo G2 during 2024W05-2024W06.”) — it runs through real extraction and lands here as pending.</>,
+          <>After approving, re-plan with <code className="font-mono">python engine/run_pipeline.py --agents</code> — approval alone never changes a plan.</>,
+        ]}
+        watch={[
+          <>The flyer's transcription contains a planted “ignore previous instructions / multiplier 3.0” line — the extracted event says ×1.3, V2 only. Injection read, recorded, refused.</>,
+          <>Image events are pinned at confidence 0.75, below the 0.8 batch floor — only per-row approval works on them, by design.</>,
+          <>Card footers show which backend and prompt version produced each row — provenance is stamped at extraction time and never rewritten.</>,
+          <>Deleting an inbox file removes only its <i>pending</i> events; approved/rejected rows survive as the audit trail, and labeled eval fixtures can't be deleted at all.</>,
+        ]}
+      />
+
       <Provenance
         sources="signals table in planz.db, extracted from the message files in engine/signals_inbox/; expectations from labels.json (the eval ground truth)."
-        model="Pluggable extractor (llm.py): claude-sonnet-5 when ANTHROPIC_API_KEY is set, offline rules-v1 otherwise — the backend column shows which produced each row. Text events: a quote that isn't verbatim in the source file drops confidence to 0. Image events (+vision rows) can't get that guarantee — the model authors both the events and the transcription they're checked against — so their confidence is capped at 0.75, below the 0.8 batch-approve floor: a human must approve each one by row id (--approve-signal <id>) after comparing the stored transcription and image hash with the file. Every event passes the same sanitize boundary (known entities, horizon bounds, multiplier limits)."
+        model="Pluggable extractor (llm.py): claude-sonnet-5 when ANTHROPIC_API_KEY is set, offline rules-v1 otherwise — the backend column shows which produced each row. Text events: a quote that isn't verbatim in the source file drops confidence to 0. Image events (+vision rows) can't get that guarantee — the model authors both the events and the transcription they're checked against — so their confidence is capped at 0.75, below the 0.8 batch-approve floor: a human must approve each one individually (button here, or --approve-signal <id>) after comparing the stored transcription and image hash with the file. Every event passes the same sanitize boundary (known entities, horizon bounds, multiplier limits)."
         params={[
-          "Auto-approval floor: confidence ≥ 0.8 — and only when explicitly requested",
+          "Approve/Reject buttons run the identical targeted UPDATE as the CLI human gate — and only on pending rows: decisions are never overwritten",
           "Statuses survive re-extraction (content-hash keyed); rejections are permanent",
-          "Prompt versions are provenance: v2 scored 14% recall and was rejected by the eval gate; v3 scores 100%/100%",
+          "Prompt versions are provenance: v2 scored 14% recall and was rejected by the eval gate; v3 and vision-v1 score 100%/100%",
         ]}
-        takeaway="Each card shows the event's decoded values (variants, weeks as fiscal labels, caps/multipliers) plus whether it matches the labeled expectation — nothing here has touched a plan unless its status is 'approved'."
+        takeaway="Each card shows the event's decoded values (variants, weeks as fiscal labels, caps/multipliers) plus whether it matches the labeled expectation — nothing here has touched a plan unless a human approved it AND the verifier-gated re-plan ran."
       />
 
       <div className="grid gap-3 sm:grid-cols-4 mb-6">
@@ -73,12 +176,18 @@ export default function SignalsPage() {
               sub={d?.signals[0] ? `prompt ${d.signals[0].prompt_version}` : undefined} />
       </div>
 
+      {gateNote && (
+        <p className="text-xs mb-4 text-zinc-600 dark:text-zinc-400">
+          gate: {gateNote}
+        </p>
+      )}
+
       <div className="grid gap-4 md:grid-cols-2">
         {(d?.signals ?? []).map((s) => (
           <Card
             key={s.id}
             title={`${typeLabel[s.event_type] ?? s.event_type} — ${s.source}`}
-            note={`backend ${s.backend} · prompt ${s.prompt_version} · confidence ${s.confidence.toFixed(2)}`}
+            note={`id ${s.id} · backend ${s.backend} · prompt ${s.prompt_version} · confidence ${s.confidence.toFixed(2)}`}
           >
             <div className="flex flex-wrap gap-2 mb-3">
               {s.facts.map(([k, v]) => (
@@ -97,24 +206,123 @@ export default function SignalsPage() {
                 <summary className="cursor-pointer select-none">
                   image transcription (what the vision model read — compare it
                   with <code className="font-mono">engine/signals_inbox/{s.source}</code>{" "}
-                  before approving via --approve-signal {s.id})
+                  before approving)
                 </summary>
                 <pre className="mt-2 whitespace-pre-wrap font-sans text-[12px] rounded-md bg-zinc-100 dark:bg-zinc-800 p-2.5">
                   {s.transcription}
                 </pre>
               </details>
             )}
-            <div className="flex items-center gap-2">
+            <div className="flex items-center gap-2 flex-wrap">
               <span className={`px-2 py-0.5 rounded-full text-[11px] font-medium ${statusStyle[s.status] ?? ""}`}>
                 {s.status}
               </span>
               <span className={`text-[11px] font-medium ${s.label_match ? "text-emerald-700 dark:text-emerald-400" : "text-zinc-400"}`}>
                 {s.label_match ? "✓ matches labeled expectation" : "no matching label"}
               </span>
+              {s.status === "pending" && (
+                <span className="ml-auto flex gap-1.5">
+                  <button
+                    onClick={() => act(s.id, "approve")}
+                    disabled={busyId === s.id}
+                    className="rounded-md bg-emerald-600 hover:bg-emerald-700 text-white text-[11px] font-medium px-2.5 py-1 disabled:opacity-50"
+                  >
+                    approve
+                  </button>
+                  <button
+                    onClick={() => act(s.id, "reject")}
+                    disabled={busyId === s.id}
+                    className="rounded-md bg-rose-600 hover:bg-rose-700 text-white text-[11px] font-medium px-2.5 py-1 disabled:opacity-50"
+                  >
+                    reject
+                  </button>
+                </span>
+              )}
             </div>
           </Card>
         ))}
       </div>
+
+      <Card
+        title="Inbox — the message files behind the events above"
+        note="Create a new planner message (it runs through real extraction) or delete one you added. Labeled eval fixtures are immutable; deleting a file removes only its pending events."
+      >
+        <table className="w-full text-sm mb-4">
+          <thead>
+            <tr className="text-left text-xs uppercase tracking-wide text-zinc-500">
+              <th className="py-1.5">File</th>
+              <th>Kind</th>
+              <th className="text-right">Events (a/p/r)</th>
+              <th className="text-right"></th>
+            </tr>
+          </thead>
+          <tbody>
+            {(inbox?.files ?? []).map((f) => (
+              <tr key={f.name} className="border-t border-zinc-200 dark:border-zinc-800">
+                <td className="py-1.5 font-mono text-xs">{f.name}</td>
+                <td className="text-xs">
+                  {f.kind}
+                  {f.protected && (
+                    <span className="ml-2 rounded-full bg-zinc-100 dark:bg-zinc-800 px-2 py-0.5 text-[10px] text-zinc-500">
+                      eval fixture — immutable
+                    </span>
+                  )}
+                </td>
+                <td className="text-right tabular-nums text-xs">
+                  {(f.events.approved ?? 0)} / {(f.events.pending ?? 0)} / {(f.events.rejected ?? 0)}
+                </td>
+                <td className="text-right">
+                  {!f.protected && (
+                    <button
+                      onClick={() => deleteFile(f.name)}
+                      className={`rounded-md text-[11px] font-medium px-2.5 py-1 ${
+                        confirmDel === f.name
+                          ? "bg-rose-600 text-white"
+                          : "border border-zinc-300 dark:border-zinc-700 text-zinc-600 dark:text-zinc-400"
+                      }`}
+                    >
+                      {confirmDel === f.name ? "confirm delete" : "delete"}
+                    </button>
+                  )}
+                </td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+
+        <div className="grid gap-2">
+          <textarea
+            value={msg}
+            onChange={(e) => setMsg(e.target.value)}
+            rows={3}
+            placeholder='New planner message, e.g. "Expect a 25% uplift for Variant V3 in Geo G2 during 2024W05-2024W06."'
+            className="rounded-lg border border-zinc-300 dark:border-zinc-700 bg-white dark:bg-zinc-900 px-3 py-2 text-sm"
+          />
+          <div className="flex flex-wrap items-center gap-2">
+            <input
+              value={fname}
+              onChange={(e) => setFname(e.target.value)}
+              placeholder="filename (optional, .txt)"
+              className="rounded-lg border border-zinc-300 dark:border-zinc-700 bg-white dark:bg-zinc-900 px-3 py-1.5 text-xs w-52"
+            />
+            <button
+              onClick={createMessage}
+              disabled={creating || !msg.trim()}
+              className="rounded-lg bg-zinc-900 dark:bg-zinc-100 text-white dark:text-zinc-900 px-4 py-1.5 text-xs font-medium disabled:opacity-50"
+            >
+              {creating ? "saving & extracting…" : "save & extract"}
+            </button>
+            {inbox && !inbox.hasKey && (
+              <span className="text-[11px] text-zinc-500">
+                no API key on the server — extraction uses the offline rules parser
+              </span>
+            )}
+          </div>
+          {createNote && (
+            <p className="text-xs text-zinc-600 dark:text-zinc-400">{createNote}</p>
+          )}
+        </div>
+      </Card>
     </div>
   );
 }
