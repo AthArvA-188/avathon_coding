@@ -10,6 +10,7 @@ import {
   XAxis,
   YAxis,
 } from "recharts";
+import Provenance from "@/components/Provenance";
 import { Card, fmt, Meta, Sel, useJson } from "@/components/ui";
 
 type Series = {
@@ -50,6 +51,17 @@ export default function ForecastPage() {
         Net sell-through, actuals 2021W41–2023W39 and forecast 2023W40–2024W39.
         Weeks are fiscal (year starts ~October).
       </p>
+      <Provenance
+        sources="actuals table (ingested from program_z.xlsx 'Data - 104 weeks', reconciled to Excel at full series grain) and the forecast table written by engine/planz/forecast.py."
+        model="One global XGBoost quantile model (P10/P50/P90) across all 124 series, trained on log(units) with volume weights, recursing week-by-week over the 52-week horizon. V10/V11 (zero history) ramp on deseasonalized V8/V9 analog curves scaled to their committed deal volumes; V12 is EOL-zero; exclusive/one-time-deal volumes cap cumulative forecasts (docs D23)."
+        params={[
+          "Features: lags (incl. fiscal year-over-year), rolling stats, explicit promo-calendar flags, known-ahead prices to 2024W27",
+          "Backtest: last 13 actual weeks (2023W27–W39) held out; baselines: naive & seasonal-naive",
+          "Adopted config after logged experiments (D9): 37.6% WAPE / +3.3% bias vs seasonal-naive 50.7%",
+        ]}
+        takeaway="A 952,865-unit P50 year vs 896,000 units of capacity — the demand signal that forces everything downstream."
+      />
+
       <div className="flex flex-wrap gap-4 mb-5">
         <Sel label="Variant" value={variant} onChange={setVariant}
              options={meta?.variants ?? []} allLabel="All variants" />

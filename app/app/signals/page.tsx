@@ -1,23 +1,23 @@
 "use client";
-import { Card, fmt, Stat, useJson } from "@/components/ui";
+import Provenance from "@/components/Provenance";
+import { Card, Stat, useJson } from "@/components/ui";
 
-type Data = {
-  available: boolean;
-  signals: {
-    id: number; source: string; event_type: string; params_json: string;
-    evidence: string; backend: string; prompt_version: string;
-    confidence: number; status: string; created_at: string;
-  }[];
-  log: { ts: string; agent: string; action: string; detail: string;
-         outcome: string }[];
-  agenticProduction: number | null;
-  validation: { check_name: string; status: string }[];
+type Signal = {
+  id: number; source: string; event_type: string; evidence: string;
+  backend: string; prompt_version: string; confidence: number; status: string;
+  facts: [string, string][]; label_match: boolean;
 };
+type Data = { available: boolean; signals: Signal[] };
 
 const statusStyle: Record<string, string> = {
   approved: "bg-emerald-100 text-emerald-900 dark:bg-emerald-950 dark:text-emerald-200",
   pending: "bg-amber-100 text-amber-900 dark:bg-amber-950 dark:text-amber-200",
   rejected: "bg-rose-100 text-rose-900 dark:bg-rose-950 dark:text-rose-200",
+};
+const typeLabel: Record<string, string> = {
+  supply_cap: "Supply cap",
+  demand_shock: "Demand shock",
+  freight_disruption: "Freight disruption",
 };
 
 export default function SignalsPage() {
@@ -26,127 +26,82 @@ export default function SignalsPage() {
   if (d && !d.available) {
     return (
       <div className="max-w-2xl">
-        <h1 className="text-xl font-semibold mb-2">Signals & agent log</h1>
+        <h1 className="text-xl font-semibold mb-2">Signals</h1>
         <p className="text-sm text-zinc-600 dark:text-zinc-400">
-          No signals have been extracted yet. Run{" "}
+          No signals extracted yet — run{" "}
           <code className="font-mono">python engine/run_pipeline.py --signals</code>{" "}
-          to scan the inbox, approve with{" "}
-          <code className="font-mono">--approve-signals</code>, then{" "}
-          <code className="font-mono">--agents</code> for the planning loop —
-          and refresh this page.
+          and refresh.
         </p>
       </div>
     );
   }
 
-  const approved = d?.signals.filter((s) => s.status === "approved").length ?? 0;
-  const pending = d?.signals.filter((s) => s.status === "pending").length ?? 0;
+  const counts = { approved: 0, pending: 0, rejected: 0 } as Record<string, number>;
+  d?.signals.forEach((s) => (counts[s.status] = (counts[s.status] ?? 0) + 1));
+  const matched = d?.signals.filter((s) => s.label_match).length ?? 0;
 
   return (
     <div>
-      <h1 className="text-xl font-semibold mb-1">Signals & agent log</h1>
-      <p className="text-sm text-zinc-500 dark:text-zinc-400 mb-5 max-w-2xl">
-        Unstructured inbox messages become typed, auditable planning events.
-        Nothing touches a plan until a human approves it; the agentic loop
-        below records every handoff.
+      <h1 className="text-xl font-semibold mb-1">Signals</h1>
+      <p className="text-sm text-zinc-500 dark:text-zinc-400 mb-4 max-w-2xl">
+        Unstructured planner messages (supplier emails, retailer notes,
+        carrier advisories) turned into typed, auditable planning events.
+        Approval is a human act; the agentic loop that consumes these lives on
+        its own page.
       </p>
 
+      <Provenance
+        sources="signals table in planz.db, extracted from the message files in engine/signals_inbox/; expectations from labels.json (the eval ground truth)."
+        model="Pluggable extractor (llm.py): claude-sonnet-5 when ANTHROPIC_API_KEY is set, offline rules-v1 otherwise — the backend column shows which produced each row. Every event passes a sanitize boundary (known entities, horizon bounds, multiplier limits) and the evidence quote must appear verbatim in the source or confidence drops to 0."
+        params={[
+          "Auto-approval floor: confidence ≥ 0.8 — and only when explicitly requested",
+          "Statuses survive re-extraction (content-hash keyed); rejections are permanent",
+          "Prompt versions are provenance: v2 scored 14% recall and was rejected by the eval gate; v3 scores 100%/100%",
+        ]}
+        takeaway="Each card shows the event's decoded values (variants, weeks as fiscal labels, caps/multipliers) plus whether it matches the labeled expectation — nothing here has touched a plan unless its status is 'approved'."
+      />
+
       <div className="grid gap-3 sm:grid-cols-4 mb-6">
-        <Stat label="events extracted" value={`${d?.signals.length ?? "–"}`} />
-        <Stat label="approved / pending" value={`${approved} / ${pending}`} />
-        <Stat
-          label="agentic plan production"
-          value={d?.agenticProduction ? `${fmt(d.agenticProduction)} u` : "not published"}
-        />
-        <Stat
-          label="agentic validators"
-          value={
-            d?.validation.length
-              ? `${d.validation.filter((v) => v.status === "PASS").length}/${d.validation.length} PASS`
-              : "–"
-          }
-        />
+        <Stat label="events" value={`${d?.signals.length ?? "–"}`} />
+        <Stat label="approved / pending / rejected"
+              value={`${counts.approved} / ${counts.pending} / ${counts.rejected}`} />
+        <Stat label="match the labeled expectation"
+              value={d ? `${matched} of ${d.signals.length}` : "–"} />
+        <Stat label="extractor"
+              value={d?.signals[0] ? `${d.signals[0].backend}` : "–"}
+              sub={d?.signals[0] ? `prompt ${d.signals[0].prompt_version}` : undefined} />
       </div>
 
-      <Card
-        title="Extracted events"
-        note="Every event carries provenance: source, verbatim evidence quote, backend, prompt version, confidence. Approve/reject via the CLI (--approve-signals / --reject-signals); decisions survive re-extraction."
-      >
-        <div className="overflow-x-auto">
-          <table className="w-full text-[12.5px]">
-            <thead>
-              <tr className="text-left text-[10px] uppercase tracking-wide text-zinc-500">
-                <th className="py-1.5 pr-3">Source</th>
-                <th className="pr-3">Type</th>
-                <th className="pr-3">Parameters</th>
-                <th className="pr-3">Evidence</th>
-                <th className="pr-3">Backend</th>
-                <th className="pr-3 text-right">Conf</th>
-                <th>Status</th>
-              </tr>
-            </thead>
-            <tbody>
-              {(d?.signals ?? []).map((s) => (
-                <tr key={s.id} className="border-t border-zinc-200 dark:border-zinc-800 align-top">
-                  <td className="py-1.5 pr-3 font-mono text-[11px] whitespace-nowrap">{s.source}</td>
-                  <td className="pr-3 whitespace-nowrap">{s.event_type}</td>
-                  <td className="pr-3 font-mono text-[11px]">{s.params_json}</td>
-                  <td className="pr-3 text-zinc-500 dark:text-zinc-400 max-w-72">
-                    “{s.evidence.slice(0, 140)}{s.evidence.length > 140 ? "…" : ""}”
-                  </td>
-                  <td className="pr-3 font-mono text-[11px] whitespace-nowrap">
-                    {s.backend} · {s.prompt_version}
-                  </td>
-                  <td className="pr-3 text-right tabular-nums">{s.confidence.toFixed(2)}</td>
-                  <td>
-                    <span className={`px-2 py-0.5 rounded-full text-[11px] font-medium ${statusStyle[s.status] ?? ""}`}>
-                      {s.status}
-                    </span>
-                  </td>
-                </tr>
+      <div className="grid gap-4 md:grid-cols-2">
+        {(d?.signals ?? []).map((s) => (
+          <Card
+            key={s.id}
+            title={`${typeLabel[s.event_type] ?? s.event_type} — ${s.source}`}
+            note={`backend ${s.backend} · prompt ${s.prompt_version} · confidence ${s.confidence.toFixed(2)}`}
+          >
+            <div className="flex flex-wrap gap-2 mb-3">
+              {s.facts.map(([k, v]) => (
+                <span key={k}
+                      className="inline-flex items-baseline gap-1.5 rounded-md bg-zinc-100 dark:bg-zinc-800 px-2.5 py-1 text-[12px]">
+                  <span className="text-zinc-500 dark:text-zinc-400 uppercase text-[9.5px] tracking-wide">{k}</span>
+                  <span className="font-medium tabular-nums">{v}</span>
+                </span>
               ))}
-            </tbody>
-          </table>
-        </div>
-      </Card>
-
-      <Card
-        title="Agent log"
-        note="Append-only audit trail of the planning loop: who did what, and what the verifier decided. REJECTED lines carry the exact reason."
-      >
-        <div className="overflow-x-auto">
-          <table className="w-full text-[12.5px]">
-            <thead>
-              <tr className="text-left text-[10px] uppercase tracking-wide text-zinc-500">
-                <th className="py-1.5 pr-3">Time (UTC)</th>
-                <th className="pr-3">Agent</th>
-                <th className="pr-3">Action</th>
-                <th className="pr-3">Detail</th>
-                <th>Outcome</th>
-              </tr>
-            </thead>
-            <tbody>
-              {(d?.log ?? []).map((l, i) => (
-                <tr key={i} className="border-t border-zinc-200 dark:border-zinc-800 align-top">
-                  <td className="py-1.5 pr-3 font-mono text-[11px] whitespace-nowrap">
-                    {l.ts.replace("T", " ").replace("+00:00", "")}
-                  </td>
-                  <td className="pr-3 whitespace-nowrap font-medium">{l.agent}</td>
-                  <td className="pr-3 whitespace-nowrap">{l.action}</td>
-                  <td className="pr-3 text-zinc-600 dark:text-zinc-400">{l.detail}</td>
-                  <td className={`whitespace-nowrap font-medium ${
-                    l.outcome.includes("REJECT") ? "text-rose-600 dark:text-rose-400"
-                    : l.outcome.includes("ACCEPT") || l.outcome === "DONE"
-                      ? "text-emerald-700 dark:text-emerald-400"
-                      : "text-zinc-500"}`}>
-                    {l.outcome}
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
-      </Card>
+            </div>
+            <p className="text-[12.5px] text-zinc-500 dark:text-zinc-400 italic mb-3">
+              “{s.evidence}”
+            </p>
+            <div className="flex items-center gap-2">
+              <span className={`px-2 py-0.5 rounded-full text-[11px] font-medium ${statusStyle[s.status] ?? ""}`}>
+                {s.status}
+              </span>
+              <span className={`text-[11px] font-medium ${s.label_match ? "text-emerald-700 dark:text-emerald-400" : "text-zinc-400"}`}>
+                {s.label_match ? "✓ matches labeled expectation" : "no matching label"}
+              </span>
+            </div>
+          </Card>
+        ))}
+      </div>
     </div>
   );
 }

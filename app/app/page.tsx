@@ -17,8 +17,18 @@ export default function Home() {
     },
     {
       href: "/signals",
-      title: "Signals & Agents",
-      body: "LLM-extracted planning events with provenance and a human approval gate, plus the agentic loop's audit trail.",
+      title: "Signals",
+      body: "LLM-extracted planning events with decoded values, provenance, eval-label matches, and the human approval gate.",
+    },
+    {
+      href: "/agents",
+      title: "Agents",
+      body: "The agentic loop's append-only audit trail: proposals, verifier rejections with reasons, and the published plan.",
+    },
+    {
+      href: "/planner",
+      title: "Ask the Planner",
+      body: "Voice or text questions answered deterministically from the database — with the SQL shown — and guarded what-ifs.",
     },
   ];
   return (
@@ -32,7 +42,7 @@ export default function Home() {
         MPS → scenario</code>). To re-plan with new inputs, re-run the pipeline
         and refresh.
       </p>
-      <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+      <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
         {cards.map((c) => (
           <a
             key={c.href}

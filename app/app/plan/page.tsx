@@ -13,6 +13,7 @@ import {
   XAxis,
   YAxis,
 } from "recharts";
+import Provenance from "@/components/Provenance";
 import { Card, fmt, Meta, Sel, Stat, useJson } from "@/components/ui";
 
 type Plan = {
@@ -61,6 +62,18 @@ export default function PlanPage() {
         Solved by the MILP; every hard constraint re-verified by independent
         validators after the solve.
       </p>
+
+      <Provenance
+        sources="mps, shipments and inventory tables (plan_id 'baseline') written by engine/planz/mps.py; demand consumed from the forecast table (P50)."
+        model="Mixed-integer program (PuLP + CBC, ~30 s): weekly production per variant, binary pack-out slots, shipments across each geo's freight frontier, two-tier inventory (DC on-hand + in-transit vs 12-WOS target; Channel-3 reseller stock vs 13-WOS). A greedy heuristic (--heuristic) runs the same rules as a cross-check: cheaper freight but 99,455 units unmet vs this plan's zero."
+        params={[
+          "Hard: 17,280 u/week · 224,000 u/quarter · ≤4 pack-out variants/week · volume caps · no ship that can't land in-horizon",
+          "Objective priority: unmet demand ≫ channel WOS (13) > supply WOS (12) > freight > holding",
+          "Opening state assumed at policy targets (D24, client question); WOS is run-out based",
+          "Every solve re-verified by 9 independent checks incl. a full inventory-balance replay",
+        ]}
+        takeaway="Capacity, not demand, is the binding constraint: three quarters run at exactly the cap and buffers are consumed to protect sell-through."
+      />
 
       <div className="grid gap-3 sm:grid-cols-4 mb-6">
         <Stat label="total production" value={`${fmt(totalProd)} u`} />

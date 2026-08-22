@@ -11,6 +11,7 @@ import {
   XAxis,
   YAxis,
 } from "recharts";
+import Provenance from "@/components/Provenance";
 import { Card, fmt, Stat, useJson } from "@/components/ui";
 
 type Diff = {
@@ -53,6 +54,17 @@ export default function ScenarioPage() {
         4,500 u/week for 2023W40–2023W45. Both plans are pre-solved — the toggle
         compares them instantly.
       </p>
+
+      <Provenance
+        sources="the same mps/shipments/inventory tables, under two plan_ids: 'baseline' and 'scenario' — both pre-solved by the pipeline, so this toggle is a query, not a re-solve."
+        model="Identical MILP to the baseline plus one hard constraint: combined V2+V4 production ≤ 4,500 u/week for 2023W40–W45 (the brief's shared-enclosure shortage). The V2-vs-V4 split is not hand-picked — the WOS-equalizing objective allocates scarce units to whichever variant is closer to running out."
+        params={[
+          "Constrained window: first 6 weeks of CQ+1 (Jul–Aug, the pre-holiday build window)",
+          "Observed allocation: alternating full-cap weeks (pack-out slot economics) → exact 50/50",
+          "Validators re-checked incl. the shared-cap constraint (11 checks on this plan)",
+        ]}
+        takeaway="Volume and cost barely move (−346 u, ~flat freight) — the real damage is time: V2+V4 cover trails baseline for ~8 months because a factory at capacity cannot catch up."
+      />
 
       {on && t && (
         <div className="grid gap-3 sm:grid-cols-4 mb-6">

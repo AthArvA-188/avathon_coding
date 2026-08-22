@@ -2,7 +2,7 @@
 
 Every story has the same five beats: **the problem → the options → what I
 picked → the number that proves it → the pushback answer**. Rehearse the
-beats, not the words. Full detail behind each: `docs/decisions.md` (D1–D28).
+beats, not the words. Full detail behind each: `docs/decisions.md` (D1–D29).
 
 ---
 

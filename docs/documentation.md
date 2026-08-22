@@ -94,6 +94,7 @@ avathon_coding/
 │   ├── verify.py               # 14-check independent auditor
 │   └── tests/
 ├── app/                        # Next.js (App Router, TS, Tailwind, Recharts)
+│   └── app/planner/            # §3.4: "Ask the Planner" — voice/text → intent → whitelisted SQL (D29)
 └── deck/                       # HTML slide deck
 ```
 

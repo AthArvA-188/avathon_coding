@@ -21,8 +21,10 @@ export const metadata: Metadata = {
 const nav = [
   { href: "/forecast", label: "Forecast" },
   { href: "/plan", label: "MPS & Pack-out" },
-  { href: "/scenario", label: "Shortage Scenario" },
-  { href: "/signals", label: "Signals & Agents" },
+  { href: "/scenario", label: "Scenario" },
+  { href: "/signals", label: "Signals" },
+  { href: "/agents", label: "Agents" },
+  { href: "/planner", label: "Ask the Planner" },
 ];
 
 export default function RootLayout({ children }: LayoutProps<"/">) {

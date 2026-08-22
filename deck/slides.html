@@ -410,16 +410,21 @@
 
 <!-- 15 ─ next-gen: conversational UX -->
 <section class="slide">
-  <div class="kicker">Where this stack goes · 3 of 3</div>
+  <div class="kicker">Where this stack goes · 3 of 3 — <b>prototyped, in the app</b></div>
   <h2>A conversational planner that cannot break the rules</h2>
+  <p><b>“Ask the Planner”</b> (<code>/planner</code>): speak or type a question —
+  Web Speech API on-device, so no audio leaves the machine. claude-sonnet-5
+  classifies it into a typed intent; a regex fallback runs offline. The LLM
+  never writes SQL or numbers — every answer comes from whitelisted queries
+  against <code>planz.db</code>, and the executed SQL is shown with the answer.</p>
   <table style="max-width:880px">
     <tr><th>Planner asks</th><th>Answered by</th></tr>
-    <tr><td>"What if Retailer R4 doubles their Q4 order on V3?"</td>
-        <td><b>Deterministic</b> — edit the demand cube, re-solve, diff (the scenario machinery, generalized)</td></tr>
-    <tr><td>"Keep V1 above 12 WOS in G1 even if V12 stocks out"</td>
-        <td><b>Deterministic</b> — re-weight the objective, re-solve; the LLM only translates intent</td></tr>
-    <tr><td>"Explain why V8's plan changed this week"</td>
-        <td><b>LLM</b> — narrate the diff of two solved plans plus the binding constraints</td></tr>
+    <tr><td>"How much are we spending on air freight?"</td>
+        <td><b>Deterministic</b> — intent → parameterized query → answer + the SQL that produced it</td></tr>
+    <tr><td>"What if demand for V1 in G1 goes up 20%?"</td>
+        <td><b>Gated action</b> — translated to a structured signal event; it must pass sanitize → human approval → verifier before any plan changes</td></tr>
+    <tr><td>"Explain why V2 and V4 got hurt in the scenario"</td>
+        <td><b>Deterministic today, LLM-narrated next</b> — the differing weeks of two solved plans; narration is presentation-only, so it can't corrupt a plan</td></tr>
   </table>
   <p style="margin-top:18px" class="quote">The guardrail is architectural: the
   language layer may only emit structured actions into the validated pipeline.
@@ -445,7 +450,7 @@
   </ul>
   <p class="foot">Everything reproducible: ./start.sh · python engine/verify.py
   (14 independent checks) · 66 tests · two planning methods compared
-  (--heuristic) · signals + agentic loop prototypes (--signals / --agents) · docs/decisions.md D1–D28 · per-phase commit history incl.
+  (--heuristic) · signals + agentic loop + voice planner prototypes (--signals / --agents / app /planner) · docs/decisions.md D1–D29 · per-phase commit history incl.
   what adversarial review caught</p>
 </section>
 
