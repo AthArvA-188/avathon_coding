@@ -26,8 +26,9 @@ QUARTER_START = {0, 13, 26, 39}
 
 
 def solve(conn: sqlite3.Connection, plan_id: str = "heuristic",
-          extra_prod_caps=None, demand_mults=None, mode_blocks=None) -> dict:
-    pairs, d_dir, d_ch3 = mps.load_demand(conn)
+          extra_prod_caps=None, demand_mults=None, mode_blocks=None,
+          quantile: str = "p50") -> dict:
+    pairs, d_dir, d_ch3 = mps.load_demand(conn, quantile)
     mps.apply_demand_mults(pairs, d_dir, d_ch3, demand_mults)
     blocked = {(g, m, w) for g, m, ws in (mode_blocks or []) for w in ws}
     d_tot = {k: d_dir[k] + d_ch3[k] for k in pairs}
@@ -166,17 +167,20 @@ def solve(conn: sqlite3.Connection, plan_id: str = "heuristic",
 
 
 def run(db_path: str | Path, plan_id: str = "heuristic",
-        extra_prod_caps=None, demand_mults=None, mode_blocks=None) -> dict:
+        extra_prod_caps=None, demand_mults=None, mode_blocks=None,
+        quantile: str = "p50") -> dict:
     from . import validate
     conn = db.connect(db_path)
     try:
         sol = solve(conn, plan_id, extra_prod_caps=extra_prod_caps,
-                    demand_mults=demand_mults, mode_blocks=mode_blocks)
+                    demand_mults=demand_mults, mode_blocks=mode_blocks,
+                    quantile=quantile)
         mps.persist_plan(conn, plan_id, sol)
         checks = validate.run_checks(conn, plan_id,
                                      extra_prod_caps=extra_prod_caps,
                                      mode_blocks=mode_blocks,
-                                     demand_mults=demand_mults)
+                                     demand_mults=demand_mults,
+                                     quantile=quantile)
         failed = [c for c in checks if c[2] == "FAIL"]
         if failed:
             raise RuntimeError(f"heuristic plan failed validation: {failed}")

@@ -145,16 +145,20 @@ def backend_name() -> str:
     return "rules-v1"
 
 
-def _require(ok: bool) -> None:
+def _require(ok: bool, reason: str) -> None:
     # explicit raise, NOT assert: this is the trust boundary, and asserts
-    # are stripped under `python -O` (adversarial review round 4)
+    # are stripped under `python -O` (adversarial review round 4). The
+    # reason is the human-readable policy explanation surfaced on screen.
     if not ok:
-        raise ValueError("event failed sanitize")
+        raise ValueError(reason)
 
 
-def sanitize(events: list[dict]) -> tuple[list[dict], int]:
+def sanitize(events: list[dict],
+             reasons_out: list | None = None) -> tuple[list[dict], int]:
     """The trust boundary: keep only well-formed, in-bounds events over known
-    entities; drop (and count) everything else. Deduplicates per message."""
+    entities; drop (and count) everything else. Deduplicates per message.
+    Pass `reasons_out` (a list) to receive one human-readable policy reason
+    per dropped event — a refusal the user can't see reads as a bug."""
     valid, seen, dropped = [], set(), 0
     for e in events:
         try:
@@ -162,55 +166,89 @@ def sanitize(events: list[dict]) -> tuple[list[dict], int]:
             p = dict(e["params"])
             start = int(p["start_offset"])
             n = int(p["n_weeks"])
-            _require(0 <= start < H and 1 <= n and start + n <= H)
+            _require(0 <= start < H and 1 <= n and start + n <= H,
+                     f"{et}: week window outside the 52-week horizon"
+                     f" (start_offset {start}, n_weeks {n})")
             if et == "supply_cap":
                 p["variants"] = sorted(set(p["variants"]))
                 _require(bool(p["variants"])
-                         and set(p["variants"]) <= ALL_VARIANTS)
+                         and set(p["variants"]) <= ALL_VARIANTS,
+                         "supply_cap: unknown variant(s) "
+                         f"{sorted(set(p['variants']) - ALL_VARIANTS) or '(none given)'}"
+                         " — only Variant V1–V12 exist")
                 p["weekly_cap"] = float(p["weekly_cap"])
-                _require(p["weekly_cap"] > 0)
+                _require(p["weekly_cap"] > 0,
+                         "supply_cap: weekly_cap must be a positive number")
             elif et == "demand_shock":
-                _require(p["variant"] in set(CORE_VARIANTS))  # prototype
                 # policy: deal/exclusive volumes are contractual — shocks on
                 # them are a human conversation, not an auto multiplier
-                _require(p.get("geo") in KNOWN_GEOS)     # no geo => no event
+                _require(p["variant"] in set(CORE_VARIANTS),
+                         f"demand_shock on {p.get('variant')} refused —"
+                         " demand shocks are only auto-accepted for core"
+                         " variants V1–V4; deal/exclusive volumes are"
+                         " contractual (a human conversation, not an auto"
+                         " multiplier)")
+                _require(p.get("geo") in KNOWN_GEOS,     # no geo => no event
+                         f"demand_shock: geo {p.get('geo')!r} is not a known"
+                         " Geo G1–G5 (an event without a known geo is"
+                         " refused)")
                 p["multiplier"] = float(p["multiplier"])
-                _require(MULT_MIN <= p["multiplier"] <= MULT_MAX)
+                _require(MULT_MIN <= p["multiplier"] <= MULT_MAX,
+                         f"demand_shock: multiplier {p['multiplier']} is"
+                         f" outside the {MULT_MIN}–{MULT_MAX} sanity band")
             elif et == "freight_disruption":
-                _require(p["geo"] in KNOWN_GEOS and p["mode"] in KNOWN_MODES)
+                _require(p["geo"] in KNOWN_GEOS and p["mode"] in KNOWN_MODES,
+                         f"freight_disruption: unknown geo/mode"
+                         f" {p.get('geo')!r}/{p.get('mode')!r}")
             else:
-                raise ValueError(et)
+                raise ValueError(f"unknown event type {et!r} — only"
+                                 " supply_cap, demand_shock and"
+                                 " freight_disruption exist")
             p["start_offset"], p["n_weeks"] = start, n
             key = json.dumps({"t": et, "p": p}, sort_keys=True)
             if key in seen:
                 dropped += 1
+                if reasons_out is not None:
+                    reasons_out.append(f"{et}: duplicate of an event already"
+                                       " extracted from this message")
                 continue
             seen.add(key)
             valid.append({"event_type": et, "params": p,
                           "evidence": str(e.get("evidence", ""))[:500],
                           "confidence": max(0.0, min(1.0,
                                             float(e.get("confidence", 0.0))))})
-        except Exception:
+        except Exception as exc:
             dropped += 1
+            if reasons_out is not None:
+                if isinstance(exc, KeyError):
+                    reasons_out.append(
+                        f"malformed event — missing field {exc}")
+                else:
+                    reasons_out.append(str(exc) or type(exc).__name__)
     return valid, dropped
 
 
-def extract(text: str) -> tuple[list[dict], str]:
-    """-> (sanitized events, backend that actually produced them)."""
+def extract(text: str,
+            drop_reasons: list | None = None) -> tuple[list[dict], str]:
+    """-> (sanitized events, backend that actually produced them).
+    Pass `drop_reasons` (a list) to receive the policy reason for every
+    event the sanitize boundary refused."""
     if os.environ.get("ANTHROPIC_API_KEY"):
         try:
             raw = _extract_claude(text)
-            events, _ = sanitize(raw)
+            events, _ = sanitize(raw, drop_reasons)
             return events, backend_name()
         except Exception:
             # fall back, but NEVER mislabel provenance as the LLM's output
-            events, _ = sanitize(_extract_rules(text))
+            events, _ = sanitize(_extract_rules(text), drop_reasons)
             return events, "rules-v1(fallback)"
-    events, _ = sanitize(_extract_rules(text))
+    events, _ = sanitize(_extract_rules(text), drop_reasons)
     return events, "rules-v1"
 
 
-def extract_image(data: bytes, media_type: str) -> tuple[list[dict], str, str]:
+def extract_image(data: bytes, media_type: str,
+                  drop_reasons: list | None = None
+                  ) -> tuple[list[dict], str, str]:
     """Vision path (docs D30): images require the Claude backend — there is
     no offline rules parser for pixels, so without a key the file is skipped
     (never guessed at). -> (sanitized events, backend, transcription).
@@ -233,7 +271,7 @@ def extract_image(data: bytes, media_type: str) -> tuple[list[dict], str, str]:
         # a broken image or API error never crashes the batch — and is
         # never mislabeled as a successful LLM read
         return [], "none(vision-error)", ""
-    events, _ = sanitize(raw)
+    events, _ = sanitize(raw, drop_reasons)
     return events, backend_name() + "+vision", transcription
 
 

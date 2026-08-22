@@ -56,7 +56,9 @@ def _hash(source: str, event_type: str, params: dict, extra: str = "") -> str:
 
 
 def extract_inbox(db_path, inbox_dir=None,
-                  skipped_out: list | None = None) -> list[dict]:
+                  skipped_out: list | None = None,
+                  extracted_out: dict | None = None,
+                  rejected_out: dict | None = None) -> list[dict]:
     """Extract events from every .txt AND image file in the inbox and persist
     as 'pending'. Rows are keyed by content hash: existing approved/rejected
     rows are left untouched; pending rows that no longer extract are pruned —
@@ -64,6 +66,14 @@ def extract_inbox(db_path, inbox_dir=None,
     image) is exempt from pruning: "not attempted" is not "no longer
     extracts", so an offline re-run can never delete image events that are
     waiting on a human (adversarial review round 4).
+
+    Pass `extracted_out` (a dict) to receive {filename: n_events} for every
+    file that WAS processed — a file that was read but yielded zero events
+    (e.g. a demand shock on a non-core variant, refused by sanitize) is a
+    policy outcome the caller should be able to report, not silence.
+    Pass `rejected_out` (a dict) to receive {filename: [reason, ...]} — the
+    human-readable sanitize-policy reason for every refused event, so the
+    UI/CLI can say WHY a message produced no numbers.
 
     Images (docs D30) go through the vision backend; the evidence-substring
     rule is enforced against the model's own transcription (which is
@@ -83,9 +93,10 @@ def extract_inbox(db_path, inbox_dir=None,
                     p.suffix.lower() in llm.IMAGE_MEDIA))
     for f in files:
         is_image = f.suffix.lower() in llm.IMAGE_MEDIA
+        drop_reasons: list[str] = []
         if not is_image:
             text = f.read_text(encoding="utf-8")
-            events, backend = llm.extract(text)
+            events, backend = llm.extract(text, drop_reasons=drop_reasons)
             haystack, transcription, sha = text, "", ""
             prompt_version = llm.PROMPT_VERSION
         else:
@@ -94,7 +105,8 @@ def extract_inbox(db_path, inbox_dir=None,
                 continue
             data = f.read_bytes()
             events, backend, transcription = llm.extract_image(
-                data, llm.IMAGE_MEDIA[f.suffix.lower()])
+                data, llm.IMAGE_MEDIA[f.suffix.lower()],
+                drop_reasons=drop_reasons)
             if backend.startswith("none("):
                 # not attempted (no key / API error) — leave any existing
                 # pending rows for this file alone
@@ -102,6 +114,10 @@ def extract_inbox(db_path, inbox_dir=None,
                 continue
             haystack, sha = transcription, hashlib.sha256(data).hexdigest()
             prompt_version = llm.VISION_PROMPT_VERSION
+        if extracted_out is not None:
+            extracted_out[f.name] = len(events)
+        if rejected_out is not None and drop_reasons:
+            rejected_out[f.name] = drop_reasons
         flat = haystack.replace("\n", " ")
         for e in events:
             # provenance must be real: a quote that is not verbatim in the

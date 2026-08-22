@@ -53,7 +53,7 @@ def test_vision_rows_persist_full_provenance(tmp_path, monkeypatch):
     transcription, and the image's content hash — the audit trail a human
     needs to check the read against the picture."""
     inbox, data = _image_inbox(tmp_path)
-    monkeypatch.setattr(llm, "extract_image", lambda d, m: (
+    monkeypatch.setattr(llm, "extract_image", lambda d, m, drop_reasons=None: (
         [dict(GOOD_EVENT)], "claude:claude-sonnet-5+vision", TRANSCRIPTION))
     db_path = tmp_path / "signals.db"
     found = signals.extract_inbox(db_path, inbox_dir=inbox)
@@ -81,7 +81,7 @@ def test_vision_events_never_batch_approve_but_approve_one_works(
     catch an image event; approve_one(id) — targeted, after the human
     compares transcription vs image — must."""
     inbox, _ = _image_inbox(tmp_path)
-    monkeypatch.setattr(llm, "extract_image", lambda d, m: (
+    monkeypatch.setattr(llm, "extract_image", lambda d, m, drop_reasons=None: (
         [dict(GOOD_EVENT, confidence=1.0)],
         "claude:claude-sonnet-5+vision", TRANSCRIPTION))
     db_path = tmp_path / "signals.db"
@@ -108,11 +108,13 @@ def test_offline_rerun_never_prunes_pending_image_rows(tmp_path, monkeypatch):
     'not attempted' is not 'no longer extracts'."""
     inbox, _ = _image_inbox(tmp_path)
     db_path = tmp_path / "signals.db"
-    monkeypatch.setattr(llm, "extract_image", lambda d, m: (
+    monkeypatch.setattr(llm, "extract_image", lambda d, m, drop_reasons=None: (
         [dict(GOOD_EVENT)], "claude:claude-sonnet-5+vision", TRANSCRIPTION))
     signals.extract_inbox(db_path, inbox_dir=inbox)     # "online" run
 
-    monkeypatch.undo()                                  # real extract_image,
+    monkeypatch.undo()                                  # real extract_image
+    # make "offline" true even on a machine whose shell has a real key
+    monkeypatch.delenv("ANTHROPIC_API_KEY", raising=False)
     skipped: list = []                                  # no key -> skipped
     found = signals.extract_inbox(db_path, inbox_dir=inbox,
                                   skipped_out=skipped)
@@ -133,7 +135,7 @@ def test_changed_image_bytes_rekey_the_event(tmp_path, monkeypatch):
     new hash) instead of silently keeping stale provenance."""
     inbox, _ = _image_inbox(tmp_path, data=b"image v1")
     db_path = tmp_path / "signals.db"
-    monkeypatch.setattr(llm, "extract_image", lambda d, m: (
+    monkeypatch.setattr(llm, "extract_image", lambda d, m, drop_reasons=None: (
         [dict(GOOD_EVENT)], "claude:claude-sonnet-5+vision",
         TRANSCRIPTION + f"\n[bytes:{d!r}]"))
     signals.extract_inbox(db_path, inbox_dir=inbox)
@@ -172,7 +174,7 @@ def test_empty_evidence_zeroes_confidence(tmp_path, monkeypatch):
     """An image event with no evidence quote at all must not keep its
     confidence — same rule as a fabricated quote."""
     inbox, _ = _image_inbox(tmp_path)
-    monkeypatch.setattr(llm, "extract_image", lambda d, m: (
+    monkeypatch.setattr(llm, "extract_image", lambda d, m, drop_reasons=None: (
         [dict(GOOD_EVENT, evidence="")],
         "claude:claude-sonnet-5+vision", TRANSCRIPTION))
     db_path = tmp_path / "signals.db"
@@ -191,7 +193,7 @@ def test_evidence_must_match_transcription(tmp_path, monkeypatch):
     source-verbatim rule — hence the separate confidence ceiling)."""
     inbox, _ = _image_inbox(tmp_path)
     fabricated = dict(GOOD_EVENT, evidence="A sentence the image never had.")
-    monkeypatch.setattr(llm, "extract_image", lambda d, m: (
+    monkeypatch.setattr(llm, "extract_image", lambda d, m, drop_reasons=None: (
         [fabricated], "claude:claude-sonnet-5+vision", TRANSCRIPTION))
     db_path = tmp_path / "signals.db"
     signals.extract_inbox(db_path, inbox_dir=inbox)

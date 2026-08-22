@@ -22,9 +22,15 @@ CLI; rolling-origin backtesting; a Channel-3 reseller-drift curve in the
 scenario view; and a cost curve for the WOS-target-vs-air-freight dial, the
 most consequential policy choice in the plan.
 
+**A note on the API key.** Everything runs offline, but the §3.4 prototypes
+are Claude-backed when `ANTHROPIC_API_KEY` is set: claude-sonnet-5 extracts
+the signals, reads the image notices, and parses planner questions. Without
+it, deterministic stand-ins take the same slots and label themselves — and
+image signals are skipped rather than guessed at.
+
 **Look at first.** `deck/slides.html` for the story; `python engine/verify.py`
 for a 10-second independent audit of every headline number; `docs/decisions.md`
-for all 31 decisions and the options considered. The commit history is
+for all 33 decisions and the options considered. The commit history is
 per-phase and includes what five adversarial review rounds caught (a
 phantom-shipment exploit, a prompt-injection path, a CSRF hole in the write
 surface) — I'd rather show the misses and fixes than pretend there were none.

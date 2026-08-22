@@ -48,8 +48,18 @@ def main(argv: list[str] | None = None) -> int:
     ap.add_argument("--reject-signals", action="store_true",
                     help="HUMAN GATE: reject all pending events (survives"
                          " re-extraction)")
+    ap.add_argument("--quantile", choices=["p10", "p50", "p90"],
+                    default="p50",
+                    help="forecast quantile that drives the --mps and"
+                         " --heuristic demand cube (default p50). Non-p50"
+                         " plans persist under their own plan_id (e.g."
+                         " baseline_p90) next to the P50 plans; the V2+V4"
+                         " scenario always re-solves P50 vs the P50 baseline")
     ap.add_argument("--all", action="store_true", help="run every stage")
     args = ap.parse_args(argv)
+    q = args.quantile
+    plan_mps = "baseline" if q == "p50" else f"baseline_{q}"
+    plan_heur = "heuristic" if q == "p50" else f"heuristic_{q}"
 
     stages = {k: (getattr(args, k) or args.all)
               for k in ("ingest", "forecast", "mps", "scenario", "heuristic")}
@@ -80,13 +90,47 @@ def main(argv: list[str] | None = None) -> int:
     if stages["mps"]:
         from planz import mps
         t0 = time.perf_counter()
-        info = mps.run(args.db, plan_id="baseline")
+        info = mps.run(args.db, plan_id=plan_mps, quantile=q)
         dt = time.perf_counter() - t0
-        print(f"[mps] baseline solved + validated in {dt:.0f}s")
+        print(f"[mps] {plan_mps} solved + validated in {dt:.0f}s"
+              f" (demand quantile: {q})")
         print(f"  total production: {info['total_production']:,.0f} u")
         print(f"  freight cost:     ${info['freight_cost']:,.0f}")
         print(f"  unmet demand:     {info['total_short']:,.0f} u")
+        if q != "p50":
+            # calculations FROM the quantile plan: head-to-head vs the P50
+            # baseline, if one has been solved into this DB
+            from planz import heuristic
+            cmp_rows = heuristic.compare(args.db, "baseline", plan_mps)
+            if cmp_rows[0][1]:
+                print(f"  {'plan':<14} {'production':>12} {'freight':>12}"
+                      f" {'unmet':>10} {'medWOSsup':>10}")
+                for p, prod, cost, short, ws, _ in cmp_rows:
+                    print(f"  {p:<14} {prod:>12,.0f}"
+                          f" {'$' + format(cost, ',.0f'):>12}"
+                          f" {short:>10,.0f}"
+                          f" {format(ws, '.1f') if ws is not None else '-':>10}")
 
+    if stages["scenario"]:
+        import sqlite3
+        if q != "p50":
+            print("[scenario] note: the V2+V4 scenario is defined vs the P50"
+                  " baseline — --quantile does not apply here")
+        # the diff is meaningless without a solved P50 baseline (a fresh DB
+        # run with --all --quantile p90 only has baseline_p90) — skip with a
+        # pointer instead of printing the scenario's own totals as "deltas"
+        try:
+            _c = sqlite3.connect(args.db)
+            has_base = _c.execute("SELECT COUNT(*) FROM mps WHERE"
+                                  " plan_id = 'baseline'").fetchone()[0]
+            _c.close()
+        except sqlite3.OperationalError:
+            has_base = 0
+        if not has_base:
+            print("[scenario] SKIPPED — no P50 'baseline' plan in this DB to"
+                  " diff against. Solve it first:"
+                  " python engine/run_pipeline.py --mps")
+            stages["scenario"] = False
     if stages["scenario"]:
         from planz import scenario
         t0 = time.perf_counter()
@@ -107,13 +151,22 @@ def main(argv: list[str] | None = None) -> int:
     if stages["heuristic"]:
         from planz import heuristic
         t0 = time.perf_counter()
-        heuristic.run(args.db)
+        heuristic.run(args.db, plan_id=plan_heur, quantile=q)
         dt = time.perf_counter() - t0
-        print(f"[heuristic] greedy plan built + validated in {dt:.0f}s")
-        print(f"  {'plan':<10} {'production':>12} {'freight':>12}"
+        print(f"[heuristic] greedy plan built + validated in {dt:.0f}s"
+              f" (demand quantile: {q})")
+        cmp_rows = heuristic.compare(args.db, plan_mps, plan_heur)
+        if not cmp_rows[0][1]:
+            # no MILP counterpart at this quantile — don't print a fabricated
+            # zero-production row that reads like a plan serving all demand
+            flag = "" if q == "p50" else f" --quantile {q}"
+            cmp_rows = cmp_rows[1:]
+            print(f"  (no '{plan_mps}' plan in this DB to compare against —"
+                  f" solve it with: python engine/run_pipeline.py --mps{flag})")
+        print(f"  {'plan':<14} {'production':>12} {'freight':>12}"
               f" {'unmet':>8} {'medWOSsup':>10} {'medWOSch':>9}")
-        for p, prod, cost, short, ws, wc in heuristic.compare(args.db):
-            print(f"  {p:<10} {prod:>12,.0f} {'$' + format(cost, ',.0f'):>12}"
+        for p, prod, cost, short, ws, wc in cmp_rows:
+            print(f"  {p:<14} {prod:>12,.0f} {'$' + format(cost, ',.0f'):>12}"
                   f" {short:>8,.0f}"
                   f" {format(ws, '.1f') if ws is not None else '-':>10}"
                   f" {format(wc, '.1f') if wc is not None else '-':>9}")
@@ -121,11 +174,21 @@ def main(argv: list[str] | None = None) -> int:
     if stages["signals"]:
         from planz import signals
         skipped: list = []
-        found = signals.extract_inbox(args.db, skipped_out=skipped)
+        extracted: dict = {}
+        rejected: dict = {}
+        found = signals.extract_inbox(args.db, skipped_out=skipped,
+                                      extracted_out=extracted,
+                                      rejected_out=rejected)
         print(f"[signals] {len(found)} events extracted (pending approval)")
         for name, reason in skipped:
             print(f"  {name:<26} SKIPPED ({reason}) — existing pending"
                   " rows for it are preserved")
+        for name, reasons in sorted(rejected.items()):
+            for r in reasons:
+                print(f"  {name:<26} REFUSED: {r}")
+        for name in sorted(n for n, c in extracted.items()
+                           if c == 0 and n not in rejected):
+            print(f"  {name:<26} read, but no planning content recognized")
         for e in found:
             print(f"  {e['source']:<26} {e['event_type']:<19}"
                   f" conf {e['confidence']:.2f}  {e['params']}")

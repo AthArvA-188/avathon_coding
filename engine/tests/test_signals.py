@@ -85,7 +85,7 @@ def test_low_confidence_stays_pending(tmp_path, monkeypatch):
     db_path = tmp_path / "signals.db"
     monkeypatch.setattr(
         llm, "extract",
-        lambda text: ([{"event_type": "supply_cap",
+        lambda text, drop_reasons=None: ([{"event_type": "supply_cap",
                         "params": {"variants": ["Variant V1"],
                                    "start_offset": 0, "n_weeks": 1,
                                    "weekly_cap": 1.0},
@@ -105,7 +105,7 @@ def test_fabricated_evidence_cannot_auto_approve(tmp_path, monkeypatch):
     # a quote that is NOT verbatim in the source is zero-confidence forever
     monkeypatch.setattr(
         llm, "extract",
-        lambda text: ([{"event_type": "demand_shock",
+        lambda text, drop_reasons=None: ([{"event_type": "demand_shock",
                         "params": {"variant": "Variant V1", "geo": "Geo G1",
                                    "start_offset": 0, "n_weeks": 4,
                                    "multiplier": 3.0},
@@ -170,3 +170,43 @@ def test_rejection_survives_reextraction(tmp_path):
     finally:
         conn.close()
     assert signals.approve(db_path) == 0                # stays rejected
+
+
+def test_sanitize_reports_policy_reasons():
+    """A refusal the user can't see reads as a bug: sanitize must name WHY
+    each event was dropped (surfaced in the UI/CLI extraction notes)."""
+    reasons: list = []
+    events, dropped = llm.sanitize([{
+        "event_type": "demand_shock",
+        "params": {"variant": "Variant V5", "geo": "Geo G1",
+                   "start_offset": 5, "n_weeks": 2, "multiplier": 1.3},
+        "evidence": "", "confidence": 0.9,
+    }], reasons)
+    assert events == [] and dropped == 1
+    assert len(reasons) == 1
+    assert "Variant V5" in reasons[0] and "core variants" in reasons[0]
+
+
+def test_extract_inbox_reports_rejected_reasons(tmp_path, monkeypatch):
+    """The per-file rejected_out dict is what the UI note and the --signals
+    CLI print — a V5 demand shock must arrive there with its policy reason."""
+    inbox = tmp_path / "inbox"
+    inbox.mkdir()
+    (inbox / "v5_note.txt").write_text(
+        "Expect a 30% uplift for Variant V5 in Geo G1 during"
+        " 2024W07-2024W08.", encoding="utf-8")
+    monkeypatch.delenv("ANTHROPIC_API_KEY", raising=False)
+    monkeypatch.setattr(llm, "_extract_rules", lambda text: [{
+        "event_type": "demand_shock",
+        "params": {"variant": "Variant V5", "geo": "Geo G1",
+                   "start_offset": 5, "n_weeks": 2, "multiplier": 1.3},
+        "evidence": "", "confidence": 0.9,
+    }])
+    extracted: dict = {}
+    rejected: dict = {}
+    found = signals.extract_inbox(tmp_path / "signals.db", inbox_dir=inbox,
+                                  extracted_out=extracted,
+                                  rejected_out=rejected)
+    assert found == []
+    assert extracted == {"v5_note.txt": 0}
+    assert "core variants" in rejected["v5_note.txt"][0]

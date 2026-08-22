@@ -4,7 +4,22 @@ import { rows } from "@/lib/db";
 // Weekly plan matrix, capacity, freight and WOS trajectory for one plan_id.
 export function GET(req: NextRequest) {
   const p = req.nextUrl.searchParams;
-  const plan = p.get("plan") === "scenario" ? "scenario" : "baseline";
+  // whichever plans have actually been solved into this DB — baseline,
+  // scenario, heuristic, agentic, and any quantile variants (baseline_p90
+  // via `--quantile p90`). The un-promoted agentic candidate stays hidden.
+  const plans = (
+    rows("SELECT DISTINCT plan_id FROM mps ORDER BY plan_id") as { plan_id: string }[]
+  )
+    .map((r) => r.plan_id)
+    .filter((n) => n !== "agentic_candidate");
+  const requested = p.get("plan") ?? "baseline";
+  // fall back to a plan that actually exists (a fresh DB solved only with
+  // --quantile p90 has no 'baseline'), keeping the invariant plan ∈ plans
+  const plan = plans.includes(requested)
+    ? requested
+    : plans.includes("baseline")
+      ? "baseline"
+      : plans[0] ?? "baseline";
   const variant = p.get("variant") ?? "Variant V1";
   const geo = p.get("geo") ?? "Geo G1";
 
@@ -43,5 +58,5 @@ export function GET(req: NextRequest) {
     "SELECT check_name, status, detail FROM validation WHERE plan_id = ?",
     plan
   );
-  return NextResponse.json({ plan, matrix, weekly, quarters, freight, wos, validation });
+  return NextResponse.json({ plan, plans, matrix, weekly, quarters, freight, wos, validation });
 }

@@ -19,7 +19,7 @@ TOL = 0.5          # units; CBC solutions are continuous, tolerance is generous
 
 def run_checks(conn: sqlite3.Connection, plan_id: str,
                extra_prod_caps=None, mode_blocks=None,
-               demand_mults=None) -> list[tuple]:
+               demand_mults=None, quantile: str = "p50") -> list[tuple]:
     checks: list[tuple] = []
 
     def add(name: str, ok: bool, detail: str):
@@ -80,8 +80,9 @@ def run_checks(conn: sqlite3.Connection, plan_id: str,
     add("nonnegative_inventory", neg == 0, f"{neg} negative inventory cells")
 
     # volume caps: cumulative production per capped variant (D23)
-    pairs, d_dir, d_ch3 = mps.load_demand(conn)
-    # the plan was solved against the shocked cube — replay against the same
+    # the plan was solved against the shocked cube AT A SPECIFIC QUANTILE —
+    # replay against exactly the same demand
+    pairs, d_dir, d_ch3 = mps.load_demand(conn, quantile)
     mps.apply_demand_mults(pairs, d_dir, d_ch3, demand_mults)
     d_tot = {k: d_dir[k] + d_ch3[k] for k in pairs}
     caps = mps.production_caps(conn, d_tot)

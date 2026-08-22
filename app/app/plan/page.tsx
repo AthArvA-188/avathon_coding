@@ -19,6 +19,7 @@ import { Card, fmt, Meta, Sel, Stat, useJson } from "@/components/ui";
 
 type Plan = {
   plan: string;
+  plans: string[];
   matrix: { week: string; variant: string; units: number; packout: number }[];
   weekly: { week: string; production: number; slots: number }[];
   quarters: { q: string; production: number }[];
@@ -34,12 +35,17 @@ type Plan = {
   validation: { check_name: string; status: string; detail: string }[];
 };
 
+// which forecast quantile a stored plan was solved against, from its id
+const quantileOf = (plan: string) =>
+  plan.endsWith("_p90") ? "P90" : plan.endsWith("_p10") ? "P10" : "P50";
+
 export default function PlanPage() {
   const meta = useJson<Meta>("/api/meta");
   const [variant, setVariant] = useState("Variant V1");
   const [geo, setGeo] = useState("Geo G1");
+  const [plan, setPlan] = useState("baseline");
   const data = useJson<Plan>(
-    `/api/plan?plan=baseline&variant=${encodeURIComponent(variant)}&geo=${encodeURIComponent(geo)}`
+    `/api/plan?plan=${encodeURIComponent(plan)}&variant=${encodeURIComponent(variant)}&geo=${encodeURIComponent(geo)}`
   );
 
   const grid = useMemo(() => {
@@ -58,10 +64,10 @@ export default function PlanPage() {
 
   return (
     <div>
-      <h1 className="text-xl font-semibold mb-1">MPS & pack-out — baseline</h1>
+      <h1 className="text-xl font-semibold mb-1">MPS &amp; pack-out — {data?.plan ?? plan}</h1>
       <p className="text-sm text-zinc-500 dark:text-zinc-400 mb-5">
-        Solved by the MILP; every hard constraint re-verified by independent
-        validators after the solve.
+        Solved against the {quantileOf(data?.plan ?? plan)} demand cube; every
+        hard constraint re-verified by independent validators after the solve.
       </p>
 
       <HowTo
@@ -69,26 +75,43 @@ export default function PlanPage() {
           <>Scroll the pack-out grid sideways and count filled cells in any row — never more than 4 (the slot cap), and the “slots” column keeps score.</>,
           <>Switch variant/geo under the WOS chart and watch the two lines against their 12- and 13-week targets.</>,
           <>Cross-check any stat here by asking the same question on <b>Ask the Planner</b> — it prints the SQL.</>,
+          <>Switch the <b>Plan</b> picker to <code className="font-mono">baseline_p90</code> (solve it once with <code className="font-mono">python engine/run_pipeline.py --mps --quantile p90</code>) to see the high-case calculation: what the same factory can and cannot do if demand lands at P90.</>,
         ]}
         watch={[
-          <>The quarters-at-cap stat: <b>3 of 4 quarters sit at exactly 224,000 units</b> — the year is capacity-bound, not demand-bound. That's the whole story in one number.</>,
-          <>Freight table: <b>$4.68M of $5.22M is Air</b>. Air is the shadow price of scarce capacity — production lands just-in-time and only air makes the date.</>,
+          <>The quarters-at-cap stat: <b>on the P50 baseline, 3 of 4 quarters sit at exactly 224,000 units</b> — the year is capacity-bound, not demand-bound. That's the whole story in one number (the stat above always shows the <i>selected</i> plan's count).</>,
+          <>Freight table: <b>on the P50 baseline, $4.68M of $5.22M is Air</b>. Air is the shadow price of scarce capacity — it swells to $5.17M at P90 and collapses to $2.4M at P10.</>,
           <>WOS lines eroding below target is <b>by design</b>: sell-through is protected first, buffers are spent. The strip below states the priority order.</>,
-          <>The validators stat: every hard constraint re-verified <i>after</i> the solve by independent checks.</>,
+          <>The validators stat: every hard constraint re-verified <i>after</i> the solve by independent checks (the count varies by plan — scenario and agentic add per-hook checks).</>,
         ]}
       />
 
       <Provenance
-        sources="mps, shipments and inventory tables (plan_id 'baseline') written by engine/planz/mps.py; demand consumed from the forecast table (P50)."
-        model="Mixed-integer program (PuLP + CBC, ~30 s): weekly production per variant, binary pack-out slots, shipments across each geo's freight frontier, two-tier inventory (DC on-hand + in-transit vs 12-WOS target; Channel-3 reseller stock vs 13-WOS). A greedy heuristic (--heuristic) runs the same rules as a cross-check: cheaper freight but 99,455 units unmet vs this plan's zero."
+        sources={`mps, shipments and inventory tables (plan_id '${data?.plan ?? plan}') written by engine/planz/mps.py; demand consumed from the forecast table (${quantileOf(data?.plan ?? plan)} column — quantile plans are solved with --quantile p90/p10 and live side by side with baseline).`}
+        model={(data?.plan ?? plan).startsWith("heuristic")
+          ? "Greedy heuristic (engine/planz/heuristic.py): a transparent week-by-week allocation under the same hard rules — capacity, pack-out slots, volume caps — and re-verified by the same independent validators as the MILP. It is the cross-check method: on the P50 cube it is cheaper on freight but leaves 99,455 units unmet vs the MILP baseline's zero (152,809 unmet at P90)."
+          : "Mixed-integer program (PuLP + CBC, ~30 s): weekly production per variant, binary pack-out slots, shipments across each geo's freight frontier, two-tier inventory (DC on-hand + in-transit vs 12-WOS target; Channel-3 reseller stock vs 13-WOS). On the P50 baseline the greedy cross-check (--heuristic) is cheaper on freight but leaves 99,455 units unmet vs zero here; quantile plans re-run this identical model on the P90/P10 cube — at P90 even it leaves 33,067 units unmet."}
         params={[
           "Hard: 17,280 u/week · 224,000 u/quarter · ≤4 pack-out variants/week · volume caps · no ship that can't land in-horizon",
           "Objective priority: unmet demand ≫ channel WOS (13) > supply WOS (12) > freight > holding",
           "Opening state assumed at policy targets (D24, client question); WOS is run-out based",
-          "Every solve re-verified by 9 independent checks incl. a full inventory-balance replay",
+          "Every solve re-verified by independent post-solve checks incl. a full inventory-balance replay (9 hard-constraint checks + one per scenario hook — the validators stat shows this plan's count)",
+          "Quantile plans (baseline_p90/p10): opening inventory follows the D24 policy convention — WOS targets sized to the same cube the plan is solved on — so a P90 plan models a steady-state world at P90, not a P50 world surprised by P90 demand",
         ]}
         takeaway="Capacity, not demand, is the binding constraint: three quarters run at exactly the cap and buffers are consumed to protect sell-through."
       />
+
+      <div className="flex flex-wrap items-end gap-4 mb-4">
+        <Sel label="Plan" value={plan} onChange={setPlan}
+             options={data?.plans?.length ? data.plans : [plan]} />
+        {quantileOf(data?.plan ?? plan) !== "P50" && (
+          <p className="text-xs text-amber-700 dark:text-amber-400 max-w-xl pb-1.5">
+            This plan is solved against the {quantileOf(data?.plan ?? plan)} forecast —
+            same capacity, slots, volume caps and validators, only the demand
+            changes. Compare unmet demand with <b>baseline</b>: at the P90 high
+            case the capacity wall, not the planning method, is what binds.
+          </p>
+        )}
+      </div>
 
       <div className="grid gap-3 sm:grid-cols-4 mb-6">
         <Stat label="total production" value={`${fmt(totalProd)} u`} />
@@ -197,7 +220,7 @@ export default function PlanPage() {
 
       <Card
         title="Inventory & weeks of supply"
-        note="Run-out WOS against the P50 forecast. Targets: 12 (supply position), 13 (reseller channel). In a capacity-short year the buffers erode by design — sell-through is protected first."
+        note={`Run-out WOS against the ${quantileOf(data?.plan ?? plan)} forecast (the same cube this plan was solved on). Targets: 12 (supply position), 13 (reseller channel). In a capacity-short year the buffers erode by design — sell-through is protected first.`}
       >
         <div className="flex flex-wrap gap-4 mb-4">
           <Sel label="Variant" value={variant} onChange={setVariant}

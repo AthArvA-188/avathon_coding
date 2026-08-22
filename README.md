@@ -31,14 +31,26 @@ conda create -n avathon python=3.12 -y && conda activate avathon
 pip install -r engine/requirements.txt
 
 python engine/run_pipeline.py --all        # or --ingest --forecast --mps --scenario
+python engine/run_pipeline.py --mps --quantile p90   # high-case plan from the P90
+                                           # forecast -> plan 'baseline_p90' (p10 works too)
 python engine/run_pipeline.py --signals    # §3.4: extract events from the inbox + eval
 python engine/run_pipeline.py --agents     # §3.4: run the agentic planning loop
 
-cd engine && python -m pytest tests -q     # 82 tests, ~30 s
+cd engine && python -m pytest tests -q     # 88 tests, ~60 s
 python engine/verify.py                    # 14 independent spot checks
 
 cd ../app && npm install && npm run dev    # UI on http://localhost:3000
 ```
+
+**Anthropic API key (optional).** Set `ANTHROPIC_API_KEY` in the shell *before*
+running `--signals` / `--agents` or starting the UI to get the Claude-backed
+versions of the §3.4 prototypes: claude-sonnet-5 signal extraction, reading of
+image signals (scanned notices, flyers), and the planner's natural-language
+intent parsing. Without the key everything above still runs — text signals fall
+back to a deterministic rules backend and the planner to a regex parser, and
+every result is labeled with the backend that actually produced it — but two
+things won't work: image signals are skipped (never guessed at), and planner
+questions beyond the built-in patterns won't parse.
 
 ## What you're looking at
 
@@ -49,17 +61,17 @@ cd ../app && npm install && npm run dev    # UI on http://localhost:3000
 | `engine/planz/calendar.py` | Fiscal week calendar (53-week FY2021 with a 14-week Q1) |
 | `engine/planz/features.py` + `forecast.py` | Feature builder + XGBoost P10/P50/P90 with recursive 52-week prediction and holdout backtest |
 | `engine/planz/lifecycle.py` | NPI analog launch ramps (V10/V11), EOL, volume-cap enforcement |
-| `engine/planz/mps.py` + `wos.py` | MILP (weekly/quarterly caps, ≤4 pack-out slots, two-tier WOS inventory, freight frontier) + run-out WOS |
+| `engine/planz/mps.py` + `wos.py` | MILP (weekly/quarterly caps, ≤4 pack-out slots, two-tier WOS inventory, freight frontier) + run-out WOS — the demand cube can be built from any forecast quantile (`--quantile p90/p10`; validators replay at the same quantile) |
 | `engine/planz/heuristic.py` | The second planning method: a transparent greedy plan, same validators — run `--heuristic` for the head-to-head vs the MILP |
 | `engine/planz/validate.py` | 9 independent post-solve constraint checks — the pipeline fails on any violation |
 | `engine/planz/scenario.py` | V2+V4 shared-cap re-solve + baseline diff |
 | `engine/planz/llm.py` + `signals.py` | **§3.4 prototype:** unstructured inbox — text **and images** (scanned notices, flyers via claude-sonnet-5 vision; transcription + image hash persisted for the human gate) → typed events with provenance, human approval gate, eval harness (Claude backend if `ANTHROPIC_API_KEY` is set, offline rules backend otherwise; images are skipped honestly offline) — run `--signals` |
 | `engine/planz/agents.py` | **§3.4 prototype:** agentic loop — signal extraction → approval → greedy-first proposal → verifier (constraints + service policy) → escalate to MILP → publish or `needs_human`, fully logged in `agent_log` — run `--agents` |
 | `engine/verify.py` | Human-friendly auditor: 14 checks sharing no code with the pipeline |
-| `engine/tests/` | 82 pytest tests (calendar ground truth, xlsx reconciliation, score bands, MILP smoke solve, validator mutations, signal sanitization, vision provenance + round-4/5 hardening regressions, agent-loop gates) |
-| `app/` | Next.js UI: forecast explorer, MPS & pack-out view, scenario toggle, signals page (decoded events + approve/reject buttons + inbox create/delete — the only write surface, and it's the human gate), agents audit trail — every page opens with "How to use this page" and "Where these numbers come from" strips; home adds setup, a 60-second demo script, and troubleshooting |
+| `engine/tests/` | 88 pytest tests (calendar ground truth, xlsx reconciliation, score bands, MILP smoke solve, validator mutations, signal sanitization + policy-reason reporting, vision provenance + round-4/5 hardening regressions, agent-loop gates, quantile-cube guards incl. an SQL-injection attempt) |
+| `app/` | Next.js UI: forecast explorer, MPS & pack-out view with a plan picker (baseline / scenario / heuristic / agentic / quantile plans like `baseline_p90`), scenario toggle, signals page (decoded events + approve/reject buttons + inbox create/delete incl. **drag-and-drop image upload** — the only write surface, and it's the human gate), agents audit trail — every page opens with "How to use this page" and "Where these numbers come from" strips; home adds setup, a 60-second demo script, and troubleshooting |
 | `app/app/planner/` | **§3.4 prototype:** "Ask the Planner" — voice (Web Speech API) or text → claude-sonnet-5 intent parser (regex fallback offline) → whitelisted SQL with the executed statements shown; what-ifs become gated signal events, never chat-side edits |
-| `docs/` | PRD, decision log (D1–D30 with options + rationale), progress log, technical documentation |
+| `docs/` | PRD, decision log (D1–D33 with options + rationale), progress log, technical documentation |
 
 ## Headline results
 
@@ -75,6 +87,12 @@ cd ../app && npm install && npm run dev    # UI on http://localhost:3000
 - Two planning methods, one verdict: the greedy heuristic is cheaper ($4.62M
   freight) and simpler, but leaves **99,455 u unmet vs the MILP's 0** — the
   measured price of skipping cross-week lookahead in a capacity-starved year.
+- The quantile band, planned end to end (`--quantile`): at **P90** high-case
+  demand even the optimal plan leaves **33,067 u unmet** with buffers at 0.2
+  median WOS and $5.55M freight — capacity, not the method, binds (the greedy
+  heuristic collapses to 152,809 u unmet there). At **P10** the year is
+  comfortable: 0 unmet, $3.58M freight, 7.0 median WOS. Same constraints,
+  same validators — only the demand cube changes.
 
 ## Known limitations
 

@@ -35,12 +35,20 @@ def main() -> None:
     # (round-5 fix: the old summary counted those and over-reported)
     before = _pending(db)
     skipped: list = []
-    signals.extract_inbox(db, skipped_out=skipped)
+    extracted: dict = {}
+    rejected: dict = {}
+    signals.extract_inbox(db, skipped_out=skipped, extracted_out=extracted,
+                          rejected_out=rejected)
     after = _pending(db)
     print(json.dumps({
         "new_pending": max(0, after - before),
         "pending_total": after,
         "skipped": [{"file": n, "reason": r} for n, r in skipped],
+        # read successfully but produced zero events — usually the sanitize
+        # policy (e.g. demand shocks only on core variants V1-V4), not a bug
+        "no_events": sorted(n for n, c in extracted.items() if c == 0),
+        # per-file human-readable policy reasons for every refused event
+        "rejected": rejected,
     }))
 
 

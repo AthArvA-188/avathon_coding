@@ -81,6 +81,7 @@ export default function Home() {
           <li>Signals &amp; Agents need their stages once: <code className="font-mono">python engine/run_pipeline.py --signals</code>, approve on the Signals page (or <code className="font-mono">--approve-signals</code>), then <code className="font-mono">--agents</code>.</li>
           <li>Voice input needs Chrome or Edge (Web Speech API); typing works everywhere.</li>
           <li>Optional: set <code className="font-mono">ANTHROPIC_API_KEY</code> in the shell <i>before</i> starting the pipeline/UI to get claude-sonnet-5 extraction, image reading, and intent parsing. Without it, offline rule-based stand-ins take the same slots and label themselves honestly (images are skipped, never guessed at).</li>
+          <li>Image signals can be dragged &amp; dropped straight onto the Signals page's upload zone (≤5 MB png/jpg/webp/gif). High/low-case plans: <code className="font-mono">python engine/run_pipeline.py --mps --quantile p90</code> (or p10), then pick <code className="font-mono">baseline_p90</code> in the Plan page's plan picker.</li>
         </ul>
       </details>
 

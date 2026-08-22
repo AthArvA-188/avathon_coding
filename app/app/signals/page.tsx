@@ -1,5 +1,5 @@
 "use client";
-import { useState } from "react";
+import { useRef, useState } from "react";
 import HowTo from "@/components/HowTo";
 import Provenance from "@/components/Provenance";
 import { Card, Stat, useJson } from "@/components/ui";
@@ -16,6 +16,34 @@ type InboxFile = {
   events: Record<string, number>;
 };
 type Inbox = { files: InboxFile[]; hasKey: boolean };
+
+type ExtractSummary = {
+  new_pending?: number;
+  skipped?: { file: string; reason: string }[];
+  no_events?: string[];
+  rejected?: Record<string, string[]>;
+};
+
+// One honest sentence per outcome: pending events created, files skipped,
+// events REFUSED (with the sanitize-policy reason — a silent refusal reads
+// as a bug), and files read but containing no planning content at all.
+function extractionNote(s: ExtractSummary | string | undefined, hasKey?: boolean): string {
+  if (typeof s !== "object" || !s) return "extraction ran";
+  const parts = [`extraction ran: ${s.new_pending ?? 0} new pending event(s)`];
+  if (s.skipped?.length) {
+    parts.push(
+      `${s.skipped.length} image(s) skipped (${s.skipped[0].reason}${hasKey === false ? "; vision needs ANTHROPIC_API_KEY, no offline stand-in" : ""})`
+    );
+  }
+  for (const [file, reasons] of Object.entries(s.rejected ?? {})) {
+    parts.push(`⚠ ${file} — event(s) refused by policy: ${reasons.join(" · ")}`);
+  }
+  const silent = (s.no_events ?? []).filter((f) => !(s.rejected && f in s.rejected));
+  if (silent.length) {
+    parts.push(`${silent.join(", ")}: read, but no planning content recognized`);
+  }
+  return parts.join("  —  ");
+}
 
 const statusStyle: Record<string, string> = {
   approved: "bg-emerald-100 text-emerald-900 dark:bg-emerald-950 dark:text-emerald-200",
@@ -39,6 +67,9 @@ export default function SignalsPage() {
   const [creating, setCreating] = useState(false);
   const [createNote, setCreateNote] = useState("");
   const [confirmDel, setConfirmDel] = useState("");
+  const [dragOver, setDragOver] = useState(false);
+  const [uploading, setUploading] = useState(false);
+  const fileInput = useRef<HTMLInputElement>(null);
 
   async function act(id: number, action: "approve" | "reject") {
     setBusyId(id);
@@ -59,7 +90,7 @@ export default function SignalsPage() {
   }
 
   async function createMessage() {
-    if (!msg.trim()) return;
+    if (!msg.trim() || uploading || creating) return;
     setCreating(true);
     setCreateNote("");
     try {
@@ -73,12 +104,8 @@ export default function SignalsPage() {
       const data = await r.json();
       if (!data.ok) setCreateNote(`✗ ${data.error}`);
       else if (data.extraction?.ran) {
-        const s = data.extraction.summary as
-          { new_pending?: number; skipped?: { file: string }[] } | string;
         setCreateNote(
-          typeof s === "object" && s
-            ? `✓ saved as ${data.filename} — extraction ran: ${s.new_pending ?? 0} new pending event(s)${s.skipped?.length ? `, ${s.skipped.length} image file(s) skipped` : ""}`
-            : `✓ saved as ${data.filename} — extraction ran`
+          `✓ saved as ${data.filename} — ${extractionNote(data.extraction.summary, data.hasKey)}`
         );
         setMsg(""); setFname("");
       } else {
@@ -91,6 +118,86 @@ export default function SignalsPage() {
     } finally {
       setCreating(false);
     }
+  }
+
+  async function uploadImages(list: FileList | File[]) {
+    if (uploading || creating) return;
+    const files = Array.from(list).filter(
+      (f) => /\.(png|jpe?g|webp|gif)$/i.test(f.name) || f.type.startsWith("image/")
+    );
+    if (!files.length) {
+      setCreateNote("✗ drop image files — .png .jpg .jpeg .webp .gif");
+      return;
+    }
+    setUploading(true);
+    setCreateNote("");
+    const notes: string[] = [];
+    let saved = 0;
+    for (const f of files) {
+      if (f.size === 0) {
+        notes.push(`✗ ${f.name}: empty file`);
+        continue;
+      }
+      if (f.size > 5 * 1024 * 1024) {
+        notes.push(`✗ ${f.name}: over the 5 MB cap (extraction skips oversize files)`);
+        continue;
+      }
+      // server re-validates: safe basename, alnum first char, image ext.
+      // If the name can't be made safe (no extension, too long), omit it —
+      // the server names the file from the sniffed bytes.
+      let safe: string | undefined = f.name.replace(/[^A-Za-z0-9_.-]/g, "_");
+      if (!/^[A-Za-z0-9]/.test(safe)) safe = `img_${safe}`;
+      const dot = safe.lastIndexOf(".");
+      if (dot > 40) safe = safe.slice(0, 40).replace(/[._-]+$/, "") + safe.slice(dot);
+      if (!/^[A-Za-z0-9][A-Za-z0-9_.-]{0,60}\.(png|jpe?g|webp|gif)$/i.test(safe)) {
+        safe = undefined;
+      }
+      try {
+        const b64 = await new Promise<string>((resolve, reject) => {
+          const r = new FileReader();
+          r.onload = () => resolve(String(r.result).split(",")[1] ?? "");
+          r.onerror = () => reject(r.error);
+          r.readAsDataURL(f);
+        });
+        const r = await fetch("/api/inbox", {
+          method: "POST",
+          headers: { "content-type": "application/json" },
+          body: JSON.stringify({ imageBase64: b64, filename: safe, extract: false }),
+        });
+        const data = await r.json();
+        if (!data.ok) notes.push(`✗ ${f.name}: ${data.error}`);
+        else {
+          saved += 1;
+          notes.push(`✓ ${data.filename} saved`);
+        }
+      } catch {
+        notes.push(`✗ ${f.name}: request failed — is the server still running?`);
+      }
+    }
+    // one extraction pass covers the whole batch — triggered separately so
+    // a failed or skipped last file can never silently skip extraction
+    if (saved > 0) {
+      try {
+        const r = await fetch("/api/inbox", {
+          method: "POST",
+          headers: { "content-type": "application/json" },
+          body: JSON.stringify({ extract: true }),
+        });
+        const data = await r.json();
+        if (data.ok && data.extraction?.ran) {
+          notes.push(extractionNote(data.extraction.summary, data.hasKey));
+        } else {
+          notes.push(
+            data.extraction?.error ?? "extraction not run — python engine/run_pipeline.py --signals"
+          );
+        }
+      } catch {
+        notes.push("extraction request failed — run: python engine/run_pipeline.py --signals");
+      }
+    }
+    setCreateNote(notes.join("  ·  "));
+    setUploading(false);
+    setBump((b) => b + 1);
   }
 
   async function deleteFile(name: string) {
@@ -144,11 +251,13 @@ export default function SignalsPage() {
           <>Open <b>image transcription</b> on the promo-flyer card and read its fine print against the extracted values.</>,
           <>Approve or reject pending events with the buttons on each card — that IS the human gate (same SQL as <code className="font-mono">--approve-signal</code>).</>,
           <>Add your own message in the <b>Inbox</b> card below (e.g. “Expect a 25% uplift for Variant V3 in Geo G2 during 2024W05-2024W06.”) — it runs through real extraction and lands here as pending.</>,
+          <>Drag &amp; drop an image (scanned notice, flyer) onto the upload zone in the Inbox card — it takes the same rails as CLI-dropped images: vision extraction, capped confidence, per-row human approval. Needs <code className="font-mono">ANTHROPIC_API_KEY</code> on the server; offline it is saved and honestly skipped.</>,
           <>After approving, re-plan with <code className="font-mono">python engine/run_pipeline.py --agents</code> — approval alone never changes a plan.</>,
         ]}
         watch={[
           <>The flyer's transcription contains a planted “ignore previous instructions / multiplier 3.0” line — the extracted event says ×1.3, V2 only. Injection read, recorded, refused.</>,
           <>Image events are pinned at confidence 0.75, below the 0.8 batch floor — only per-row approval works on them, by design.</>,
+          <>A message can be read perfectly and still yield <b>zero events</b>: the sanitize boundary only auto-accepts demand shocks on core variants <b>V1–V4</b> (deal/exclusive volumes like V5 are contractual — a human conversation, not an auto multiplier) and only known geos/fiscal weeks. The extraction note names any file that was read but refused.</>,
           <>Card footers show which backend and prompt version produced each row — provenance is stamped at extraction time and never rewritten.</>,
           <>Deleting an inbox file removes only its <i>pending</i> events; approved/rejected rows survive as the audit trail, and labeled eval fixtures can't be deleted at all.</>,
         ]}
@@ -307,7 +416,7 @@ export default function SignalsPage() {
             />
             <button
               onClick={createMessage}
-              disabled={creating || !msg.trim()}
+              disabled={creating || uploading || !msg.trim()}
               className="rounded-lg bg-zinc-900 dark:bg-zinc-100 text-white dark:text-zinc-900 px-4 py-1.5 text-xs font-medium disabled:opacity-50"
             >
               {creating ? "saving & extracting…" : "save & extract"}
@@ -318,6 +427,59 @@ export default function SignalsPage() {
               </span>
             )}
           </div>
+          <div
+            role="button"
+            tabIndex={0}
+            aria-label="Upload an image signal — drag and drop or click to browse"
+            onDragOver={(e) => { e.preventDefault(); setDragOver(true); }}
+            onDragLeave={() => setDragOver(false)}
+            onDrop={(e) => {
+              e.preventDefault();
+              setDragOver(false);
+              if (!uploading) uploadImages(e.dataTransfer.files);
+            }}
+            onClick={() => !uploading && fileInput.current?.click()}
+            onKeyDown={(e) => {
+              if ((e.key === "Enter" || e.key === " ") && !uploading) fileInput.current?.click();
+            }}
+            className={`rounded-lg border-2 border-dashed px-4 py-5 text-center text-xs cursor-pointer transition-colors ${
+              dragOver
+                ? "border-zinc-500 bg-zinc-100 dark:bg-zinc-800 text-zinc-700 dark:text-zinc-200"
+                : "border-zinc-300 dark:border-zinc-700 text-zinc-500 dark:text-zinc-400"
+            } ${uploading ? "opacity-60 cursor-wait" : ""}`}
+          >
+            {uploading ? (
+              "uploading & extracting…"
+            ) : (
+              <>
+                <span className="font-medium">drag & drop an image signal</span> — scanned
+                carrier notice, promo flyer, portal screenshot — or click to browse
+                <span className="block mt-1 text-[11px]">
+                  .png .jpg .jpeg .webp .gif, ≤5 MB · it lands in{" "}
+                  <code className="font-mono">engine/signals_inbox/</code> and runs through
+                  the same vision extraction + human gate as CLI-dropped files
+                </span>
+                {inbox && !inbox.hasKey && (
+                  <span className="block mt-1 text-[11px] text-amber-700 dark:text-amber-400">
+                    no ANTHROPIC_API_KEY on the server — the file will be saved but skipped
+                    by extraction (vision has no offline stand-in; it extracts once a key
+                    is set and <code className="font-mono">--signals</code> re-runs)
+                  </span>
+                )}
+              </>
+            )}
+          </div>
+          <input
+            ref={fileInput}
+            type="file"
+            accept="image/png,image/jpeg,image/webp,image/gif"
+            multiple
+            hidden
+            onChange={(e) => {
+              if (e.target.files?.length) uploadImages(e.target.files);
+              e.target.value = "";
+            }}
+          />
           {createNote && (
             <p className="text-xs text-zinc-600 dark:text-zinc-400">{createNote}</p>
           )}

@@ -56,15 +56,26 @@ def week_label(w: int) -> str:
 
 # ---------------- data loading ----------------
 
-def load_demand(conn: sqlite3.Connection):
-    """P50 demand cube split into direct (Ch1+Ch2) and reseller (Ch3) parts.
+QUANTILE_COLS = ("p10", "p50", "p90")
+
+
+def load_demand(conn: sqlite3.Connection, quantile: str = "p50"):
+    """Demand cube at the chosen forecast quantile (P50 by default) split
+    into direct (Ch1+Ch2) and reseller (Ch3) parts.
     Returns (pairs, d_direct, d_ch3) with extended arrays of length H+EXT:
     weeks beyond the horizon repeat the same fiscal week one year earlier
-    (the horizon starts exactly at a fiscal year boundary)."""
+    (the horizon starts exactly at a fiscal year boundary).
+    The quantile names a forecast COLUMN and is whitelisted before being
+    interpolated into SQL; validators must replay with the same quantile
+    the plan was solved against."""
+    if quantile not in QUANTILE_COLS:
+        raise ValueError(f"quantile must be one of {QUANTILE_COLS},"
+                         f" got {quantile!r}")
     d_direct: dict[tuple, np.ndarray] = {}
     d_ch3: dict[tuple, np.ndarray] = {}
     for r in conn.execute(
-            "SELECT variant, geo, channel, week_label, p50 FROM forecast"):
+            f"SELECT variant, geo, channel, week_label,"
+            f" {quantile} AS q FROM forecast"):
         w = ft.offset_of(r["week_label"]) - 104
         if not 0 <= w < H:
             raise ValueError(f"forecast row outside horizon: {r['week_label']}")
@@ -72,7 +83,7 @@ def load_demand(conn: sqlite3.Connection):
         tgt = d_ch3 if r["channel"] == "Channel 3" else d_direct
         if key not in tgt:
             tgt[key] = np.zeros(H + EXT)
-        tgt[key][w] += r["p50"]
+        tgt[key][w] += r["q"]
     pairs = sorted({k for k in set(d_direct) | set(d_ch3)
                     if (d_direct.get(k, np.zeros(1)).sum()
                         + d_ch3.get(k, np.zeros(1)).sum()) > 0})
@@ -168,15 +179,19 @@ def solve(conn: sqlite3.Connection, plan_id: str,
           extra_prod_caps: list[tuple[tuple[str, ...], range, float]] | None = None,
           time_limit: int = 600,
           demand_mults: list[tuple[str, str | None, range, float]] | None = None,
-          mode_blocks: list[tuple[str, str, range]] | None = None) -> dict:
+          mode_blocks: list[tuple[str, str, range]] | None = None,
+          quantile: str = "p50") -> dict:
     """Build and solve the MILP; returns solution tables as lists of rows.
     extra_prod_caps: [(variants, weeks, combined weekly cap)] — each listed
     week gets its own combined-production constraint (scenario hook).
     demand_mults: [(variant, geo|None, weeks, multiplier)] — demand shocks
-    from the signals layer, applied to the P50 cube before solving.
+    from the signals layer, applied to the demand cube before solving.
     mode_blocks: [(geo, mode, weeks)] — freight disruptions: the mode is
-    unavailable for shipping in those weeks."""
-    pairs, d_dir, d_ch3 = load_demand(conn)
+    unavailable for shipping in those weeks.
+    quantile: which forecast quantile drives the demand cube (default P50;
+    P90 plans the high case, P10 the low case — same constraints, same
+    validators, persisted under their own plan_id)."""
+    pairs, d_dir, d_ch3 = load_demand(conn, quantile)
     apply_demand_mults(pairs, d_dir, d_ch3, demand_mults)
     blocked = {(g, m, w) for g, m, ws in (mode_blocks or []) for w in ws}
     d_tot = {k: d_dir[k] + d_ch3[k] for k in pairs}
@@ -353,19 +368,22 @@ def drop_plan(conn: sqlite3.Connection, plan_id: str) -> None:
 
 def run(db_path: str | Path, plan_id: str = "baseline",
         extra_prod_caps=None, time_limit: int = 600,
-        demand_mults=None, mode_blocks=None) -> dict:
-    """Solve, persist (plan-scoped — other stored plans survive), validate."""
+        demand_mults=None, mode_blocks=None, quantile: str = "p50") -> dict:
+    """Solve, persist (plan-scoped — other stored plans survive), validate.
+    The validators replay against the SAME quantile the plan was solved
+    with — checking a P90 plan against P50 demand would be meaningless."""
     from . import validate
     conn = db.connect(db_path)
     try:
         sol = solve(conn, plan_id, extra_prod_caps=extra_prod_caps,
                     time_limit=time_limit, demand_mults=demand_mults,
-                    mode_blocks=mode_blocks)
+                    mode_blocks=mode_blocks, quantile=quantile)
         persist_plan(conn, plan_id, sol)
         checks = validate.run_checks(conn, plan_id,
                                      extra_prod_caps=extra_prod_caps,
                                      mode_blocks=mode_blocks,
-                                     demand_mults=demand_mults)
+                                     demand_mults=demand_mults,
+                                     quantile=quantile)
         failed = [c for c in checks if c[2] == "FAIL"]
         if failed:
             raise RuntimeError(f"constraint validation failed: {failed}")
